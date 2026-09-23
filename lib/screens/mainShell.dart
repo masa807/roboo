@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
-import '/theme/color.dart';
-import '/utils/responsive.dart';
-import '/widget/navbar_widget.dart';
-import '/screens/home_screen.dart';
-import '/screens/table_screen.dart';
-import '/screens/request_screen.dart';
-import '/screens/stats_screen.dart';
+import '../theme/color.dart';
+import '../utils/responsive.dart';
+import '../widget/navbar_widget.dart';
+import '../widget/drawer.dart';
+import '../screens/home_screen.dart';
+import '../screens/table_screen.dart';
+import '../screens/request_screen.dart';
+import '../screens/stats_screen.dart';
+import '../screens/profile_screen.dart';
+import '../screens/login_screen.dart'; // لتسجيل الخروج
 
 /// الشاشة الأم يلي بتحمل الأربع تابات، Scaffold وحيد بكل التطبيق
-/// (AppBar متغير حسب التاب + BottomNav ثابت)
+/// (AppBar متغير حسب التاب + BottomNav ثابت + Drawer جانبي)
 /// ما في ولا Navigator.push/pop للتبديل بين التابات -> فوري بدون أي رمش
 class MainShell extends StatefulWidget {
   const MainShell({super.key});
@@ -36,21 +39,39 @@ class _MainShellState extends State<MainShell> {
     'الاحصائيات',
   ];
 
+  void _logout() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
+      drawer: AppDrawer(
+        currentIndex: _currentIndex,
+        onSelect: (i) => setState(() => _currentIndex = i),
+        onLogout: _logout,
+        onProfile: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ProfileScreen()),
+          );
+        },
+      ),
       appBar: AppBar(
         backgroundColor: AppColors.primary1,
         elevation: 0,
         centerTitle: true,
         automaticallyImplyLeading: false,
         iconTheme: const IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: Icon(Icons.menu, color: Colors.white, size: context.r(24)),
-          onPressed: () {
-            // فتح الدرج الجانبي لاحقاً
-          },
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: Icon(Icons.menu, color: Colors.white, size: context.r(24)),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
         ),
         title: Text(
           _titles[_currentIndex],
