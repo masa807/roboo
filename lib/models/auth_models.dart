@@ -35,12 +35,14 @@ class LoginResponse {
 /// وهاي يلي رح تستعملها بكل التطبيق (مثلاً user.id كـ trainerId بالـ endpoints).
 class AuthUser {
   final String id; // من claim "sub"
+  final String trainerId;
   final String email;
   final String fullName;
   final List<String> roles;
 
   const AuthUser({
     required this.id,
+    required this.trainerId,
     required this.email,
     required this.fullName,
     required this.roles,
@@ -65,6 +67,7 @@ class AuthUser {
         : <String>[];
     return AuthUser(
       id: payload['sub'] as String,
+      trainerId: payload['trainerId'] as String? ?? '',
       email: payload['email'] as String? ?? '',
       fullName: payload['fullName'] as String? ?? fullNameFallback ?? '',
       roles: roles,

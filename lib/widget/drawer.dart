@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/color.dart';
 import '../utils/responsive.dart';
+import '../blocs/auth/auth_bloc.dart';
+import '../models/auth_models.dart';
 
 /// الدرج الجانبي (Drawer) - نفس هوية التطبيق
 /// بيتحكم فيه من MainShell عبر currentIndex + onSelect
@@ -29,8 +32,17 @@ class AppDrawer extends StatelessWidget {
     ),
   ];
 
+  String _roleLabel(AuthUser? user) {
+    if (user == null) return '';
+    if (user.isAdmin) return 'أدمن';
+    if (user.isTrainer) return 'مدرب رياضي';
+    return user.roles.isNotEmpty ? user.roles.first : '';
+  }
+
   @override
   Widget build(BuildContext context) {
+    final user = context.watch<AuthBloc>().state.user;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Drawer(
@@ -72,7 +84,9 @@ class AppDrawer extends StatelessWidget {
                     ),
                     SizedBox(height: context.h(12)),
                     Text(
-                      'محمد سلامة', // TODO: اربطه لاحقاً بالـ Provider / بيانات المستخدم
+                      user?.fullName.isNotEmpty == true
+                          ? user!.fullName
+                          : 'بدون اسم',
                       style: TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -81,7 +95,7 @@ class AppDrawer extends StatelessWidget {
                     ),
                     SizedBox(height: context.h(2)),
                     Text(
-                      'مدرب كرة قدم', // TODO: نفس الشي
+                      _roleLabel(user),
                       style: TextStyle(
                         color: Colors.white.withOpacity(0.85),
                         fontSize: context.sp(12.5),

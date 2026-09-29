@@ -1,16 +1,31 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../core/network/api_client.dart';
+import '../../models/daily_checklist_model.dart';
 import '../../models/leave_request_model.dart';
 import '../../repositories/leave_request_repository.dart';
 import 'absence_state.dart';
 
 class AbsenceCubit extends Cubit<AbsenceState> {
-  AbsenceCubit(this._repository, {required this.trainerId})
-    : super(const AbsenceState());
+  AbsenceCubit(
+    this._repository, {
+    required this.trainerId,
+    this.sessionsFetcher,
+  }) : super(const AbsenceState());
 
   final LeaveRequestRepository _repository;
   final String trainerId;
+
+  /// دالة بتجيب حصص المدرب بتاريخ معين (نفس مصدر daily-checklist)
+  final Future<List<DailyChecklistItem>> Function(DateTime date)?
+  sessionsFetcher;
+
+  /// جلب حصص يوم معين لعرضها بحقل "الحصة"
+  Future<List<DailyChecklistItem>> loadSessionsForDate(DateTime date) async {
+    final fetcher = sessionsFetcher;
+    if (fetcher == null) return const [];
+    return fetcher(date);
+  }
 
   /// يجيب طلبات الغياب تبع المدرب. [status] اختياري للفلترة.
   Future<void> loadRequests({LeaveRequestStatus? status}) async {

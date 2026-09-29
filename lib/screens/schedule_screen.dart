@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import '../theme/color.dart';
-import '../models/home_model.dart';
 import '../widget/app_background.dart';
 import '../utils/responsive.dart';
+import '../blocs/schedule/schedule_cubit.dart';
+import '../blocs/schedule/schedule_state.dart';
+import '../models/weekly_schedule_model.dart';
 
 /// محتوى تاب الجدول الأسبوعي فقط - بدون Scaffold/BottomNav خاص فيه
 class WeeklyScheduleContent extends StatefulWidget {
@@ -14,90 +18,176 @@ class WeeklyScheduleContent extends StatefulWidget {
 
 class _WeeklyScheduleContentState extends State<WeeklyScheduleContent> {
   String? _openDayKey;
-  final List<DayModel> _days = [
-    DayModel(key: 'sun', name: 'الأحد', date: '', sessions: []),
-    DayModel(key: 'mon', name: 'الاثنين', date: '', sessions: []),
-    DayModel(
-      key: 'tue',
-      name: 'الثلاثاء',
-      date: '',
-      sessions: [
-        SessionModel(
-          subject: 'الرياضيات',
-          school: 'مدرسة النور الدولية',
-          time: '09:00 - 08:00',
-          status: SessionStatus.upcoming,
-        ),
-        SessionModel(
-          subject: 'اللغة الإنجليزية',
-          school: 'مدرسة النور الدولية',
-          time: '10:15 - 09:15',
-          status: SessionStatus.upcoming,
-        ),
-        SessionModel(
-          subject: 'الكيمياء',
-          school: 'مدرسة النور الدولية',
-          time: '11:30 - 10:30',
-          status: SessionStatus.upcoming,
-        ),
-      ],
-    ),
-    DayModel(key: 'wed', name: 'الأربعاء', date: '', sessions: []),
-    DayModel(key: 'thu', name: 'الخميس', date: '', sessions: []),
-    DayModel(key: 'fri', name: 'الجمعة', date: '', sessions: []),
-    DayModel(key: 'sat', name: 'السبت', date: '', sessions: []),
+
+  static const List<String> _dayKeys = [
+    'sun',
+    'mon',
+    'tue',
+    'wed',
+    'thu',
+    'fri',
+    'sat',
+  ];
+  static const List<String> _dayNames = [
+    'الأحد',
+    'الاثنين',
+    'الثلاثاء',
+    'الأربعاء',
+    'الخميس',
+    'الجمعة',
+    'السبت',
   ];
 
   @override
   void initState() {
     super.initState();
-    _openDayKey = _days.isNotEmpty ? _days.first.key : null;
+    _openDayKey = _dayKeys.first;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ScheduleCubit>().loadWeek();
+    });
+  }
+
+  /// بيجمّع حصص الأسبوع بحسب اليوم (0..6 يقابل _dayKeys)
+  Map<int, List<WeeklyScheduleItem>> _groupByDay(
+    List<WeeklyScheduleItem> sessions,
+  ) {
+    final Map<int, List<WeeklyScheduleItem>> map = {
+      for (int i = 0; i < 7; i++) i: [],
+    };
+    for (final s in sessions) {
+      // weekday: الاثنين=1 ... الأحد=7 -> نحولها لفهرس 0=الأحد..6=السبت
+      final index = s.date.weekday % 7;
+      map[index]!.add(s);
+    }
+    for (final list in map.values) {
+      list.sort((a, b) => a.startTime.compareTo(b.startTime));
+    }
+    return map;
+  }
+
+  String _formatWeekLabel(DateTime weekStart) {
+    final weekEnd = weekStart.add(const Duration(days: 6));
+    String fmt(DateTime d) => '${d.day}/${d.month}';
+    return '${fmt(weekStart)} - ${fmt(weekEnd)}';
   }
 
   @override
   Widget build(BuildContext context) {
-    // ملاحظة: ما في Scaffold ولا AppBar هون نهائياً
-    // الـ AppBar والـ Scaffold والـ BottomNav كلهم موجودين مرة وحدة بس بالـ MainShell
     return AppBackground(
       child: SafeArea(
-        child: ListView.builder(
-          padding: EdgeInsets.fromLTRB(
-            context.w(16),
-            context.h(16),
-            context.w(16),
-            context.h(24),
-          ),
-          itemCount: _days.length,
-          itemBuilder: (context, index) {
-            final day = _days[index];
-            return _WeekDayCard(
-              key: ValueKey(day.key),
-              day: day,
-              isOpen: _openDayKey == day.key,
-              onToggle: () {
-                setState(() {
-                  _openDayKey = _openDayKey == day.key ? null : day.key;
-                });
-              },
+        child: BlocBuilder<ScheduleCubit, ScheduleState>(
+          builder: (context, state) {
+            if (state.status == ScheduleStatus.loading ||
+                state.status == ScheduleStatus.initial) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state.status == ScheduleStatus.error) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        state.errorMessage ?? 'صار خطأ بتحميل الجدول',
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                      ElevatedButton(
+                        onPressed: () =>
+                            context.read<ScheduleCubit>().loadWeek(),
+                        child: const Text('إعادة المحاولة'),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }
+
+            final grouped = _groupByDay(state.sessions);
+
+            return Column(
+              children: [
+                _buildWeekNav(context, state.weekStart),
+                Expanded(
+                  child: ListView.builder(
+                    padding: EdgeInsets.fromLTRB(
+                      context.w(16),
+                      context.h(8),
+                      context.w(16),
+                      context.h(24),
+                    ),
+                    itemCount: 7,
+                    itemBuilder: (context, index) {
+                      final key = _dayKeys[index];
+                      final sessions = grouped[index] ?? [];
+                      return _WeekDayCard(
+                        key: ValueKey(key),
+                        dayName: _dayNames[index],
+                        sessions: sessions,
+                        isOpen: _openDayKey == key,
+                        onToggle: () {
+                          setState(() {
+                            _openDayKey = _openDayKey == key ? null : key;
+                          });
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
             );
           },
         ),
       ),
     );
   }
+
+  Widget _buildWeekNav(BuildContext context, DateTime weekStart) {
+    return Padding(
+      padding: EdgeInsets.symmetric(
+        horizontal: context.w(16),
+        vertical: context.h(8),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.chevron_right, color: AppColors.primary1),
+            onPressed: () => context.read<ScheduleCubit>().nextWeek(),
+          ),
+          Text(
+            _formatWeekLabel(weekStart),
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: context.sp(14),
+              color: AppColors.secondary3,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_left, color: AppColors.primary1),
+            onPressed: () => context.read<ScheduleCubit>().previousWeek(),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _WeekDayCard extends StatelessWidget {
-  final DayModel day;
+  final String dayName;
+  final List<WeeklyScheduleItem> sessions;
   final bool isOpen;
   final VoidCallback onToggle;
 
   const _WeekDayCard({
     super.key,
-    required this.day,
+    required this.dayName,
+    required this.sessions,
     required this.isOpen,
     required this.onToggle,
   });
+
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
@@ -128,7 +218,7 @@ class _WeekDayCard extends StatelessWidget {
               child: Row(
                 children: [
                   Text(
-                    day.name,
+                    dayName,
                     style: textTheme.titleSmall?.copyWith(
                       fontSize: context.sp(14),
                     ),
@@ -158,7 +248,7 @@ class _WeekDayCard extends StatelessWidget {
                 context.w(14),
                 context.h(14),
               ),
-              child: day.isEmpty
+              child: sessions.isEmpty
                   ? Center(
                       child: Padding(
                         padding: EdgeInsets.symmetric(vertical: context.h(12)),
@@ -172,7 +262,7 @@ class _WeekDayCard extends StatelessWidget {
                       ),
                     )
                   : Column(
-                      children: day.sessions
+                      children: sessions
                           .map((s) => _SessionLine(session: s))
                           .toList(),
                     ),
@@ -199,7 +289,7 @@ class _WeekDayCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        '${day.sessions.length} حصة',
+        '${sessions.length} حصة',
         style: textTheme.bodySmall?.copyWith(
           color: AppColors.primary1,
           fontWeight: FontWeight.bold,
@@ -212,7 +302,7 @@ class _WeekDayCard extends StatelessWidget {
 
 // ==== سطر الحصة الواحدة جوا الكارد ====
 class _SessionLine extends StatelessWidget {
-  final SessionModel session;
+  final WeeklyScheduleItem session;
   const _SessionLine({required this.session});
 
   @override
@@ -235,7 +325,7 @@ class _SessionLine extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    session.subject,
+                    session.subjectName,
                     textAlign: TextAlign.right,
                     style: textTheme.titleSmall?.copyWith(
                       fontSize: context.sp(13.5),
@@ -243,7 +333,7 @@ class _SessionLine extends StatelessWidget {
                   ),
                   SizedBox(height: context.h(2)),
                   Text(
-                    session.school,
+                    '${session.schoolName} · ${session.roomName}',
                     textAlign: TextAlign.right,
                     style: textTheme.bodySmall?.copyWith(
                       fontSize: context.sp(11),
@@ -255,7 +345,7 @@ class _SessionLine extends StatelessWidget {
             ),
             SizedBox(width: context.w(8)),
             Text(
-              session.time,
+              session.displayTimeRange,
               style: textTheme.bodySmall?.copyWith(
                 fontSize: context.sp(11.5),
                 color: AppColors.secondary3.withOpacity(0.7),

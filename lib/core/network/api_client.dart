@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:pretty_dio_logger/pretty_dio_logger.dart';
 
 /// استثناء موحّد لأي خطأ راجع من الـ API، منرميه من الـ Repositories
 /// ومنمسكه بالـ Cubit/Bloc لعرض رسالة واضحة بالواجهة.
@@ -28,7 +29,15 @@ class ApiClient {
            headers: {'Content-Type': 'application/json'},
          ),
        ) {
-    dio.interceptors.add(
+    dio.interceptors.addAll([
+      PrettyDioLogger(
+        requestHeader: true,
+        requestBody: true,
+        responseBody: true,
+        responseHeader: false,
+        error: true,
+        compact: true,
+      ),
       InterceptorsWrapper(
         onRequest: (options, handler) async {
           if (_tokenProvider != null) {
@@ -43,7 +52,7 @@ class ApiClient {
           handler.next(error);
         },
       ),
-    );
+    ]);
   }
 
   final Dio dio;
