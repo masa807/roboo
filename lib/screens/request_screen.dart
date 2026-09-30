@@ -6,6 +6,7 @@ import '../blocs/absence/absence_state.dart';
 import '../models/daily_checklist_model.dart';
 import '../models/leave_request_model.dart';
 import '../theme/color.dart';
+import '../widget/app_dialoge.dart';
 
 /// محتوى تاب الطلبات فقط - بدون Scaffold/BottomNav خاص فيه
 class AbsenceRequestContent extends StatefulWidget {
@@ -163,24 +164,44 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
     }
   }
 
-  Future<void> _submit() async {
+  void _showMissingDataDialog(String message) {
+    showInfoDialog(
+      context: context,
+      title: 'الرجاء استكمال البيانات',
+      message: message,
+    );
+  }
+
+  /// 1) تحقق من الحقول  2) حوار تأكيد  3) الإرسال الفعلي (_sendRequest)
+  void _submit() {
     if (selectedDate == null) {
-      _showSnack('الرجاء اختيار التاريخ', isError: true);
+      _showMissingDataDialog('الرجاء اختيار التاريخ');
       return;
     }
     if (selectedSessionValue == null) {
-      _showSnack('لا يوجد حصص في هذا التاريخ ', isError: true);
+      _showMissingDataDialog('لا يوجد حصص في هذا التاريخ');
       return;
     }
     if (reasonController.text.trim().isEmpty) {
-      _showSnack('الرجاء كتابة سبب الغياب', isError: true);
+      _showMissingDataDialog('الرجاء كتابة سبب الغياب');
       return;
     }
 
+    showConfirmDialog(
+      context: context,
+      title: 'تأكيد إرسال الطلب',
+      message: 'هل تريد إرسال طلب الغياب بتاريخ $_formattedDate؟',
+      confirmText: 'إرسال',
+      cancelText: 'مراجعة',
+      onConfirm: _sendRequest,
+    );
+  }
+
+  Future<void> _sendRequest() async {
     final success = await context.read<AbsenceCubit>().submitRequest(
       reason: reasonController.text.trim(),
-      // إذا اختارت "كل الحصص" بنبعت fullDay، وإلا حصص محددة
-      // ⚠️ تأكدي من اسم القيمة الثانية بالـ enum عندك
+      // إذا اختار "كل الحصص" بنبعت fullDay، وإلا حصص محددة
+      // ⚠️ تأكد من اسم القيمة الثانية بالـ enum عندك
       selectionMode: _isAllDay
           ? LeaveSelectionMode.fullDay
           : LeaveSelectionMode.specificSessions,
@@ -192,7 +213,6 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
     if (!mounted) return;
 
     if (success) {
-      _showSnack('تم إرسال طلب الغياب بنجاح');
       setState(() {
         selectedDate = null;
         selectedSubstituteId = null;
@@ -201,19 +221,51 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
         daySessions = [];
         reasonController.clear();
       });
+      showSuccessDialog(
+        context: context,
+        title: 'تم إرسال الطلب',
+        message: 'تم إرسال طلب الغياب بنجاح، وسيتم إشعارك عند مراجعته',
+      );
     } else {
       final error = context.read<AbsenceCubit>().state.actionError;
-      _showSnack(error ?? 'حدث خطأ أثناء إرسال الطلب', isError: true);
+      showErrorDialog(
+        context: context,
+        title: 'تعذر إرسال الطلب',
+        message: error ?? 'حدث خطأ أثناء إرسال الطلب',
+      );
     }
   }
 
-  void _showSnack(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, textAlign: TextAlign.right),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
+  /// حوار تأكيد قبل إلغاء طلب معلّق
+  void _confirmCancel(String requestId) {
+    showDeleteDialog(
+      context: context,
+      title: 'إلغاء الطلب',
+      message: 'هل تريد إلغاء طلب الغياب هذا؟ لا يمكن التراجع عن هذا الإجراء.',
+      confirmText: 'نعم، ألغِ الطلب',
+      cancelText: 'لا، تراجع',
+      onConfirm: () => _cancelRequest(requestId),
     );
+  }
+
+  Future<void> _cancelRequest(String requestId) async {
+    final success = await context.read<AbsenceCubit>().cancelRequest(requestId);
+    if (!mounted) return;
+
+    if (success) {
+      showSuccessDialog(
+        context: context,
+        title: 'تم الإلغاء',
+        message: 'تم إلغاء طلب الغياب بنجاح',
+      );
+    } else {
+      final error = context.read<AbsenceCubit>().state.actionError;
+      showErrorDialog(
+        context: context,
+        title: 'تعذر إلغاء الطلب',
+        message: error ?? 'حدث خطأ أثناء إلغاء الطلب',
+      );
+    }
   }
 
   @override
@@ -222,11 +274,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       textDirection: TextDirection.rtl,
       child: Container(
         color: AppColors.primary4,
-        child: BlocConsumer<AbsenceCubit, AbsenceState>(
-          listenWhen: (prev, curr) =>
-              prev.actionStatus != curr.actionStatus &&
-              curr.actionStatus == AbsenceActionStatus.failure,
-          listener: (context, state) {},
+        child: BlocBuilder<AbsenceCubit, AbsenceState>(
           builder: (context, state) {
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -384,7 +432,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
           if (r.status == LeaveRequestStatus.pending) ...[
             const SizedBox(width: 8),
             InkWell(
-              onTap: () => context.read<AbsenceCubit>().cancelRequest(r.id),
+              onTap: () => _confirmCancel(r.id),
               child: const Icon(Icons.close, color: Colors.red, size: 20),
             ),
           ],

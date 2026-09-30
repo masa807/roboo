@@ -1,4 +1,13 @@
 import 'package:flutter/material.dart';
+import '../theme/color.dart';
+
+/// ─────────────────────────────────────────────────────────────
+/// app_dialogs.dart  —  حوارات جاهزة لتطبيق AttendEase
+/// - بدون أي package خارجي (Flutter فقط)
+/// - بتتبع اتجاه التطبيق (RTL) وخط الـ Theme تلقائياً
+/// - ما فيها اعتماد على أي Bloc: الإجراءات كلها بتيجي كـ callbacks
+/// المسار: lib/widget/app_dialogs.dart
+/// ─────────────────────────────────────────────────────────────
 
 enum AppDialogType { success, error, warning, info, question }
 
@@ -13,16 +22,13 @@ _DialogStyle _styleOf(BuildContext context, AppDialogType type) {
     case AppDialogType.success:
       return const _DialogStyle(Icons.check_circle_rounded, Color(0xFF2E7D32));
     case AppDialogType.error:
-      return const _DialogStyle(Icons.error_rounded, Color(0xFFC62828));
+      return _DialogStyle(Icons.error_rounded, AppColors.errorColor);
     case AppDialogType.warning:
-      return const _DialogStyle(Icons.warning_rounded, Color(0xFFF57C00));
+      return _DialogStyle(Icons.warning_rounded, AppColors.errorColor);
     case AppDialogType.info:
-      return const _DialogStyle(Icons.info_rounded, Color(0xFF1565C0));
+      return _DialogStyle(Icons.info_rounded, AppColors.primary1);
     case AppDialogType.question:
-      return _DialogStyle(
-        Icons.help_rounded,
-        Theme.of(context).colorScheme.primary,
-      );
+      return _DialogStyle(Icons.help_rounded, AppColors.primary1);
   }
 }
 
@@ -340,9 +346,7 @@ Future<void> showLoadingDialog({
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+                CircularProgressIndicator(color: AppColors.primary1),
                 const SizedBox(height: 16),
                 Text(
                   message,

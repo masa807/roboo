@@ -51,6 +51,7 @@ class _MainShellState extends State<MainShell> {
     return trainerId;
   }
 
+  /// بيتنفذ بعد ما المستخدم يأكد من حوار تسجيل الخروج (الحوار جوّا الـ Drawer)
   void _logout() {
     context.read<AuthBloc>().add(const AuthLogoutRequested());
   }
@@ -123,52 +124,65 @@ class _MainShellState extends State<MainShell> {
       ];
     }
 
-    return Scaffold(
-      backgroundColor: Colors.white,
-      drawer: AppDrawer(
-        currentIndex: _currentIndex,
-        onSelect: _selectTab,
-        onLogout: _logout,
-        onProfile: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ProfileScreen()),
-          );
-        },
-      ),
-      appBar: AppBar(
-        backgroundColor: AppColors.primary1,
-        elevation: 0,
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        iconTheme: const IconThemeData(color: Colors.white),
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: Icon(Icons.menu, color: Colors.white, size: context.r(24)),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+    // لما تسجيل الخروج يخلص (unauthenticated) بنرجع لشاشة الدخول ونمسح الـ stack
+    // ملاحظة: إذا عندك هالانتقال معمول بمكان تاني (مثلاً main.dart) شيل هالـ listener
+    return BlocListener<AuthBloc, AuthState>(
+      listenWhen: (prev, curr) =>
+          prev.status != curr.status &&
+          curr.status == AuthStatus.unauthenticated,
+      listener: (context, state) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const LoginScreen()),
+          (route) => false,
+        );
+      },
+      child: Scaffold(
+        backgroundColor: Colors.white,
+        drawer: AppDrawer(
+          currentIndex: _currentIndex,
+          onSelect: _selectTab,
+          onLogout: _logout,
+          onProfile: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            );
+          },
+        ),
+        appBar: AppBar(
+          backgroundColor: AppColors.primary1,
+          elevation: 0,
+          centerTitle: true,
+          automaticallyImplyLeading: false,
+          iconTheme: const IconThemeData(color: Colors.white),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: Icon(Icons.menu, color: Colors.white, size: context.r(24)),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
           ),
-        ),
-        title: Text(
-          _titles[_currentIndex],
-          style: TextStyle(color: Colors.white, fontSize: context.sp(18)),
-        ),
-        actions: _currentIndex == 0
-            ? [
-                IconButton(
-                  icon: Icon(
-                    Icons.notifications_outlined,
-                    color: Colors.white,
-                    size: context.r(24),
+          title: Text(
+            _titles[_currentIndex],
+            style: TextStyle(color: Colors.white, fontSize: context.sp(18)),
+          ),
+          actions: _currentIndex == 0
+              ? [
+                  IconButton(
+                    icon: Icon(
+                      Icons.notifications_outlined,
+                      color: Colors.white,
+                      size: context.r(24),
+                    ),
+                    onPressed: () {},
                   ),
-                  onPressed: () {},
-                ),
-              ]
-            : null,
-      ),
-      body: IndexedStack(index: _currentIndex, children: _tabs!),
-      bottomNavigationBar: AnimatedBottomNav(
-        currentIndex: _currentIndex,
-        onTap: _selectTab,
+                ]
+              : null,
+        ),
+        body: IndexedStack(index: _currentIndex, children: _tabs!),
+        bottomNavigationBar: AnimatedBottomNav(
+          currentIndex: _currentIndex,
+          onTap: _selectTab,
+        ),
       ),
     );
   }

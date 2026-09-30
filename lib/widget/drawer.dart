@@ -3,7 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../theme/color.dart';
 import '../utils/responsive.dart';
 import '../blocs/auth/auth_bloc.dart';
+import '../blocs/auth/auth_event.dart';
 import '../models/auth_models.dart';
+import '../widget/app_dialoge.dart';
 
 /// الدرج الجانبي (Drawer) - نفس هوية التطبيق
 /// بيتحكم فيه من MainShell عبر currentIndex + onSelect
@@ -41,6 +43,7 @@ class AppDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authBloc = context.read<AuthBloc>();
     final user = context.watch<AuthBloc>().state.user;
 
     return Directionality(
@@ -145,8 +148,19 @@ class AppDrawer extends StatelessWidget {
                 iconColor: AppColors.errorColor,
                 textColor: AppColors.errorColor,
                 onTap: () {
-                  Navigator.pop(context);
-                  onLogout?.call();
+                  // context الدرج بيصير غير صالح بعد الإغلاق،
+                  // فبناخد context الـ Navigator قبل ما نسكر الدرج
+                  final navContext = Navigator.of(
+                    context,
+                    rootNavigator: true,
+                  ).context;
+                  Navigator.pop(context); // سكر الدرج
+
+                  showLogoutDialog(
+                    context: navContext,
+                    onConfirm:
+                        onLogout ?? () => authBloc.add(AuthLogoutRequested()),
+                  );
                 },
               ),
             ),

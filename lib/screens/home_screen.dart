@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../theme/color.dart';
 import '../widget/app_background.dart';
+import '../widget/app_dialoge.dart';
 import '../utils/responsive.dart';
 import '../blocs/attendance/attendance_cubit.dart';
 import '../blocs/attendance/attendance_state.dart';
@@ -28,15 +29,6 @@ class _HomeContentState extends State<HomeContent> {
     });
   }
 
-  void _showSnack(String message, {bool isError = false}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message, textAlign: TextAlign.right),
-        backgroundColor: isError ? Colors.red : Colors.green,
-      ),
-    );
-  }
-
   Future<void> _onCheckIn(String sessionTrainerId) async {
     // لو كان فاشل قبل، نشيله ليعيد المحاولة
     setState(() => _failedIds.remove(sessionTrainerId));
@@ -47,11 +39,19 @@ class _HomeContentState extends State<HomeContent> {
     if (!mounted) return;
 
     if (success) {
-      _showSnack('تم تسجيل الحضور بنجاح');
+      showSuccessDialog(
+        context: context,
+        title: 'تم تسجيل الحضور',
+        message: 'تم تسجيل حضورك بنجاح',
+      );
     } else {
       setState(() => _failedIds.add(sessionTrainerId));
       final error = context.read<AttendanceCubit>().state.checkInError;
-      _showSnack(error ?? 'تعذر تسجيل الحضور', isError: true);
+      showErrorDialog(
+        context: context,
+        title: 'تعذر تسجيل الحضور',
+        message: error ?? 'تعذر تسجيل الحضور، حاول مرة أخرى',
+      );
     }
   }
 
