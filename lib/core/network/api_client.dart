@@ -101,9 +101,9 @@ class ApiClient {
       case DioExceptionType.sendTimeout:
         return 'انتهت مهلة الاتصال بالسيرفر';
       case DioExceptionType.connectionError:
-        return 'ما في اتصال بالسيرفر، تأكد من الإنترنت';
+        return 'تعذر الاتصال بالسيرفر، تأكد من الإنترنت';
       default:
-        return e.message ?? 'صار في خطأ غير متوقع';
+        return e.message ?? 'حدث  خطأ غير متوقع';
     }
   }
 }

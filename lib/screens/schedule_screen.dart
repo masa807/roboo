@@ -89,7 +89,7 @@ class _WeeklyScheduleContentState extends State<WeeklyScheduleContent> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        state.errorMessage ?? 'صار خطأ بتحميل الجدول',
+                        state.errorMessage ?? 'حدث خطأ أثناء تحميل الجدول',
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 12),

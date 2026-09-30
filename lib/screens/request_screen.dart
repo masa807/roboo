@@ -135,7 +135,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       if (!mounted) return;
       setState(() {
         loadingSessions = false;
-        sessionsError = 'تعذر تحميل حصص هالنهار';
+        sessionsError = 'حدث خطأ في جلب الحصص';
       });
     }
   }
@@ -165,15 +165,15 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
 
   Future<void> _submit() async {
     if (selectedDate == null) {
-      _showSnack('اختاري التاريخ لتقديم الطلب', isError: true);
+      _showSnack('الرجاء اختيار التاريخ', isError: true);
       return;
     }
     if (selectedSessionValue == null) {
-      _showSnack('ما في حصص لهالتاريخ لتقدم عليها طلب', isError: true);
+      _showSnack('لا يوجد حصص في هذا التاريخ ', isError: true);
       return;
     }
     if (reasonController.text.trim().isEmpty) {
-      _showSnack('اكتبي سبب الغياب', isError: true);
+      _showSnack('الرجاء كتابة سبب الغياب', isError: true);
       return;
     }
 
@@ -203,7 +203,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       });
     } else {
       final error = context.read<AbsenceCubit>().state.actionError;
-      _showSnack(error ?? 'صار خطأ أثناء إرسال الطلب', isError: true);
+      _showSnack(error ?? 'حدث خطأ أثناء إرسال الطلب', isError: true);
     }
   }
 
@@ -276,13 +276,13 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
     }
     if (selectedDate == null) {
       return const Text(
-        'اختاري التاريخ أولاً لعرض المدربين المتاحين',
+        'الرجاء اختيار التاريخ أولاً لعرض المدربين المتاحين',
         style: TextStyle(color: Colors.grey, fontSize: 13),
       );
     }
     if (availableSubstitutes.isEmpty) {
       return const Text(
-        'لا يوجد مدربين بدلاء متاحين لهالتاريخ',
+        'لا يوجد مدربين بدلاء متاحين لهذا التاريخ',
         style: TextStyle(color: Colors.grey, fontSize: 13),
       );
     }
@@ -302,13 +302,13 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
     }
     if (state.status == AbsenceStatus.error) {
       return Text(
-        state.errorMessage ?? 'صار خطأ بتحميل الطلبات',
+        state.errorMessage ?? 'حدث خطأ أثناء تحميل الطلبات',
         style: const TextStyle(color: Colors.red, fontSize: 13),
       );
     }
     if (state.requests.isEmpty) {
       return const Text(
-        'ما في طلبات غياب سابقة',
+        'لا يوجد طلبات غياب سابقة',
         style: TextStyle(color: Colors.grey, fontSize: 13),
       );
     }
@@ -500,7 +500,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
               decoration: const InputDecoration(
                 contentPadding: EdgeInsets.all(12),
                 border: InputBorder.none,
-                hintText: 'اكتب السبب هون...',
+                hintText: 'الرجاء كتابة السبب',
                 hintStyle: TextStyle(color: Colors.grey),
               ),
             ),
@@ -557,13 +557,13 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
   Widget _buildSessionsDropdown() {
     String? hint;
     if (selectedDate == null) {
-      hint = 'اختاري التاريخ أولاً';
+      hint = 'الرجاء اختيار التاريخ أولاً';
     } else if (loadingSessions) {
       hint = 'جاري تحميل الحصص...';
     } else if (sessionsError != null) {
       hint = sessionsError;
     } else if (daySessions.isEmpty) {
-      hint = 'لا توجد حصص متاحة هالنهار';
+      hint = 'لا يوجد حصص متاحة لهذا اليوم';
     }
 
     final items = <DropdownMenuItem<String>>[];
@@ -612,7 +612,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
                 )
               : const Icon(Icons.keyboard_arrow_down),
           hint: Text(
-            hint ?? 'اختاري الحصة',
+            hint ?? 'الرجاء اختيار الحصة',
             style: const TextStyle(color: AppColors.secondary3),
           ),
           items: items,

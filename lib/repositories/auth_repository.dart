@@ -25,7 +25,7 @@ class AuthRepository {
   Future<AuthUser> refreshToken() async {
     final refreshTokenValue = await _tokenStorage.getRefreshToken();
     if (refreshTokenValue == null) {
-      throw const ApiException('ما في جلسة سابقة لتجديدها');
+      throw const ApiException('لا يوجد جلسة سابقة لتجديدها');
     }
     final response = await _client.post(
       '/api/auth/refresh-token',
@@ -35,7 +35,10 @@ class AuthRepository {
   }
 
   /// بيتفحص إذا في جلسة محفوظة صالحة لتسجيل دخول تلقائي عند فتح التطبيق.
-  /// بيرجع null إذا ما في جلسة (لازم يروح المستخدم لشاشة اللوجن).
+  /// - بيرجع المستخدم إذا التوكن صالح أو نجح تجديده.
+  /// - بيرجع null (وبيمسح الجلسة) إذا ما في جلسة أو السيرفر رفض التجديد.
+  /// - بيرمي ApiException بدون statusCode إذا الفشل بسبب الاتصال، والجلسة
+  ///   بتضل محفوظة عشان تنجرّب من جديد بالفتحة الجاية.
   Future<AuthUser?> tryAutoLogin() async {
     final accessToken = await _tokenStorage.getAccessToken();
     if (accessToken == null) return null;
@@ -44,9 +47,20 @@ class AuthRepository {
       if (!JwtUtils.isExpired(accessToken)) {
         return AuthUser.fromAccessToken(accessToken);
       }
-      // التوكن منتهي — جرب تجديده تلقائياً بالـ refresh token
+
+      // التوكن منتهي — جرب تجديده بالـ refresh token
+      final refresh = await _tokenStorage.getRefreshToken();
+      if (refresh == null) {
+        await _tokenStorage.clear();
+        return null;
+      }
       return await refreshToken();
+    } on ApiException catch (e) {
+      if (e.statusCode == null) rethrow; // مشكلة اتصال: منحتفظ بالجلسة
+      await _tokenStorage.clear(); // السيرفر رفض التجديد: الجلسة منتهية
+      return null;
     } catch (_) {
+      // توكن تالف أو غير قابل للقراءة
       await _tokenStorage.clear();
       return null;
     }

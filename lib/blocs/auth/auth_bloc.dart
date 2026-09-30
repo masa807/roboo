@@ -18,10 +18,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthCheckRequested event,
     Emitter<AuthState> emit,
   ) async {
-    final user = await _repository.tryAutoLogin();
-    if (user != null) {
-      emit(AuthState.authenticated(user));
-    } else {
+    try {
+      final user = await _repository.tryAutoLogin();
+      if (user != null) {
+        emit(AuthState.authenticated(user));
+      } else {
+        emit(const AuthState.unauthenticated());
+      }
+    } catch (_) {
+      // أي فشل بالتحقق (سيرفر مطفي، توكن تالف...) -> على اللوجين
       emit(const AuthState.unauthenticated());
     }
   }
@@ -39,6 +44,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(AuthState.authenticated(user));
     } on ApiException catch (e) {
       emit(AuthState.unauthenticated(e.message));
+    } catch (_) {
+      emit(const AuthState.unauthenticated('حدث خطأ غير متوقع'));
     }
   }
 
@@ -46,7 +53,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     AuthLogoutRequested event,
     Emitter<AuthState> emit,
   ) async {
-    await _repository.logout();
+    try {
+      await _repository.logout();
+    } catch (_) {
+      // حتى لو فشل مسح الجلسة من السيرفر، منطلّع المستخدم محلياً
+    }
     emit(const AuthState.unauthenticated());
   }
 }

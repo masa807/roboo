@@ -1,36 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import '../core/network/storage/token_storage.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'core/network/api_client.dart';
+import 'core/network/storage/token_storage.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/attendance_repository.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'repositories/leave_request_repository.dart';
+import 'repositories/schedule_repository.dart';
 import 'theme/theme.dart';
 import 'screens/login_screen.dart';
-import 'screens/schedule_screen.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
-import '../repositories/schedule_repository.dart';
+import 'blocs/auth/auth_gate.dart';
 
 void main() {
   final tokenStorage = TokenStorage.instance;
   final apiClient = ApiClient(
     baseUrl: 'http://191.218.163.66:8180',
-
-    tokenProvider: () async {
-      final token = await tokenStorage.getAccessToken();
-      print('>>> TOKEN = "$token"'); // ← مؤقت
-      return token;
-    },
+    tokenProvider: () => tokenStorage.getAccessToken(),
   );
+
   final authRepository = AuthRepository(apiClient, tokenStorage);
   final leaveRequestRepository = LeaveRequestRepository(apiClient);
   final attendanceRepository = AttendanceRepository(apiClient);
   final scheduleRepository = ScheduleRepository(apiClient);
+
   runApp(
     MultiRepositoryProvider(
-      // ← بدّلنا BlocProvider العلوي بهاد
       providers: [
         RepositoryProvider<LeaveRequestRepository>.value(
           value: leaveRequestRepository,
@@ -40,7 +37,6 @@ void main() {
         ),
         RepositoryProvider<ScheduleRepository>.value(value: scheduleRepository),
       ],
-
       child: BlocProvider(
         create: (_) =>
             AuthBloc(authRepository)..add(const AuthCheckRequested()),
@@ -68,11 +64,11 @@ class MyApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
 
-      // الثيم الموحّد يلي عملناه
+      // الثيم الموحّد
       theme: AppTheme.lightTheme,
 
       // أول شاشة تفتح
-      home: const LoginScreen(),
+      home: const AuthGate(),
     );
   }
 }

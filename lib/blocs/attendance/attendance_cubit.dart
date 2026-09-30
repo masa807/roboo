@@ -53,7 +53,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         emit(
           state.copyWith(
             checkInStatus: CheckInStatus.failure,
-            checkInError: 'خدمة الموقع مطفية، فعّليها من إعدادات الجهاز',
+            checkInError: 'خدمة الموقع غير مفعلة ',
           ),
         );
         return false;
@@ -68,7 +68,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
         emit(
           state.copyWith(
             checkInStatus: CheckInStatus.failure,
-            checkInError: 'لازم تسمح بالوصول للموقع لتسجيل الحضور',
+            checkInError: 'الرجاء السماح للتطبيق بالوصول لموقعك',
           ),
         );
         return false;
@@ -105,7 +105,7 @@ class AttendanceCubit extends Cubit<AttendanceState> {
       emit(
         state.copyWith(
           checkInStatus: CheckInStatus.failure,
-          checkInError: 'تعذر تحديد الموقع، حاول مرة تانية',
+          checkInError: 'تعذر تحديد الموقع، حاول مرة اخرى',
         ),
       );
       return false;

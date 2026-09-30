@@ -14,11 +14,14 @@ import '../screens/login_screen.dart';
 import '../blocs/absence/absence_cubit.dart';
 import '../blocs/attendance/attendance_cubit.dart';
 import '../blocs/schedule/schedule_cubit.dart';
+import '../blocs/stats/stats_cubit.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../blocs/auth/auth_state.dart';
 import '../repositories/leave_request_repository.dart';
 import '../repositories/attendance_repository.dart';
 import '../repositories/schedule_repository.dart';
+import '../repositories/stats_repository.dart';
+import '../blocs/auth/auth_event.dart';
 
 /// الشاشة الأم يلي بتحمل الأربع تابات، Scaffold وحيد بكل التطبيق
 /// (AppBar متغير حسب التاب + BottomNav ثابت + Drawer جانبي)
@@ -31,8 +34,13 @@ class MainShell extends StatefulWidget {
 }
 
 class _MainShellState extends State<MainShell> {
+  static const int _statsTabIndex = 3;
+
   int _currentIndex = 0;
   List<Widget>? _tabs;
+
+  StatsCubit? _statsCubit;
+  bool _statsLoaded = false;
 
   String _requireTrainerId(BuildContext context) {
     final user = context.read<AuthBloc>().state.user;
@@ -44,10 +52,22 @@ class _MainShellState extends State<MainShell> {
   }
 
   void _logout() {
-    Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const LoginScreen()),
-      (route) => false,
-    );
+    context.read<AuthBloc>().add(const AuthLogoutRequested());
+  }
+
+  /// تبديل التاب. الإحصائيات بتتحمّل أول مرة بتنفتح فيها بس
+  void _selectTab(int i) {
+    setState(() => _currentIndex = i);
+    if (i == _statsTabIndex && !_statsLoaded) {
+      _statsLoaded = true;
+      _statsCubit?.load();
+    }
+  }
+
+  @override
+  void dispose() {
+    _statsCubit?.close();
+    super.dispose();
   }
 
   static const List<String> _titles = [
@@ -59,49 +79,55 @@ class _MainShellState extends State<MainShell> {
 
   @override
   Widget build(BuildContext context) {
-    _tabs ??= [
-      // 0 - الرئيسية
-      BlocProvider(
-        create: (_) => AttendanceCubit(
-          context.read<AttendanceRepository>(),
-          trainerId: _requireTrainerId(context),
+    if (_tabs == null) {
+      _statsCubit = StatsCubit(
+        StatsRepository(context.read<AttendanceRepository>()),
+        trainerId: _requireTrainerId(context),
+      );
+
+      _tabs = [
+        // 0 - الرئيسية
+        BlocProvider(
+          create: (_) => AttendanceCubit(
+            context.read<AttendanceRepository>(),
+            trainerId: _requireTrainerId(context),
+          ),
+          child: const HomeContent(),
         ),
-        child: const HomeContent(),
-      ),
-      // 1 - الجدول
-      BlocProvider(
-        create: (_) => ScheduleCubit(
-          context.read<ScheduleRepository>(),
-          trainerId: _requireTrainerId(context),
+        // 1 - الجدول
+        BlocProvider(
+          create: (_) => ScheduleCubit(
+            context.read<ScheduleRepository>(),
+            trainerId: _requireTrainerId(context),
+          ),
+          child: const WeeklyScheduleContent(),
         ),
-        child: const WeeklyScheduleContent(),
-      ),
-      // 2 - الطلبات
-      // 2 - الطلبات
-      BlocProvider(
-        create: (_) {
-          final trainerId = _requireTrainerId(context);
-          final attendanceRepo = context.read<AttendanceRepository>();
-          return AbsenceCubit(
-            context.read<LeaveRequestRepository>(),
-            trainerId: trainerId,
-            sessionsFetcher: (date) => attendanceRepo.getDailyChecklist(
+        // 2 - الطلبات
+        BlocProvider(
+          create: (_) {
+            final trainerId = _requireTrainerId(context);
+            final attendanceRepo = context.read<AttendanceRepository>();
+            return AbsenceCubit(
+              context.read<LeaveRequestRepository>(),
               trainerId: trainerId,
-              date: date,
-            ),
-          );
-        },
-        child: const AbsenceRequestContent(),
-      ),
-      // 3 - الاحصائيات
-      const StatsContent(),
-    ];
+              sessionsFetcher: (date) => attendanceRepo.getDailyChecklist(
+                trainerId: trainerId,
+                date: date,
+              ),
+            );
+          },
+          child: const AbsenceRequestContent(),
+        ),
+        // 3 - الاحصائيات (التحميل أول ما تنفتح، شوف _selectTab)
+        BlocProvider.value(value: _statsCubit!, child: const StatsContent()),
+      ];
+    }
 
     return Scaffold(
       backgroundColor: Colors.white,
       drawer: AppDrawer(
         currentIndex: _currentIndex,
-        onSelect: (i) => setState(() => _currentIndex = i),
+        onSelect: _selectTab,
         onLogout: _logout,
         onProfile: () {
           Navigator.push(
@@ -142,7 +168,7 @@ class _MainShellState extends State<MainShell> {
       body: IndexedStack(index: _currentIndex, children: _tabs!),
       bottomNavigationBar: AnimatedBottomNav(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _selectTab,
       ),
     );
   }

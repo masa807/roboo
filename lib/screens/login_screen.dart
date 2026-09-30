@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:roboo_app/screens/mainShell.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../blocs/auth/auth_event.dart';
 import '../blocs/auth/auth_state.dart';
@@ -43,13 +42,9 @@ class _LoginScreenState extends State<LoginScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     return BlocListener<AuthBloc, AuthState>(
+      // الانتقال للهوم صار بيصير من AuthGate، هون بس منعرض رسالة الخطأ
       listener: (context, state) {
-        if (state.status == AuthStatus.authenticated) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const MainShell()),
-          );
-        } else if (state.status == AuthStatus.unauthenticated &&
+        if (state.status == AuthStatus.unauthenticated &&
             state.errorMessage != null) {
           ScaffoldMessenger.of(context)
             ..hideCurrentSnackBar()
@@ -186,7 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: Text(
-                                'بيانات الاعتماد معتمدة من قبل مدير النظام',
+                                'بيانات الاتصال معتمدة من قبل مدير النظام',
                                 textAlign: TextAlign.right,
                                 style: textTheme.bodySmall,
                               ),

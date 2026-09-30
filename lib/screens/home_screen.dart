@@ -153,7 +153,7 @@ class _HomeContentState extends State<HomeContent> {
                     children: [
                       SizedBox(height: context.h(40)),
                       Text(
-                        state.errorMessage ?? 'صار خطأ بتحميل حصص اليوم',
+                        state.errorMessage ?? 'حدث خطأ في جلب الحصص',
                         textAlign: TextAlign.center,
                       ),
                       SizedBox(height: context.h(12)),
@@ -170,7 +170,7 @@ class _HomeContentState extends State<HomeContent> {
                     child: Padding(
                       padding: EdgeInsets.symmetric(vertical: context.h(40)),
                       child: Text(
-                        'ما في حصص هالنهار',
+                        'لا يوجد حصص لهذا اليوم',
                         style: textTheme.bodySmall?.copyWith(
                           fontSize: context.sp(13),
                         ),
