@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "627355191353",
+    "project_id": "roboo-510502",
+    "storage_bucket": "roboo-510502.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:627355191353:android:dc3e042dacbf1945a2e5e8",
+        "android_client_info": {
+          "package_name": "com.example.roboo_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPb8vZVAPcr4iK00-MeJM_fIdDgnKrI5I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

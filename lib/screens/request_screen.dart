@@ -141,13 +141,20 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
     }
   }
 
-  Future<void> _loadSubstitutesForSelection() async {
+  /// جلب البدلاء المتاحين للحصص المختارة.
+  /// [keepSelection] = true: منحافظ على البديل المختار إذا لسا موجود بالقائمة
+  /// الجديدة (بنستخدمها بعد فشل الإرسال)، وإلا بيتفك الاختيار.
+  Future<void> _loadSubstitutesForSelection({
+    bool keepSelection = false,
+  }) async {
     final ids = _selectedSessionIds;
     if (ids.isEmpty) return;
 
+    final previousSelection = selectedSubstituteId; // جديد
+
     setState(() {
       loadingSubstitutes = true;
-      selectedSubstituteId = null;
+      if (!keepSelection) selectedSubstituteId = null; // جديد
     });
     try {
       final result = await context
@@ -157,6 +164,10 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       setState(() {
         availableSubstitutes = result;
         loadingSubstitutes = false;
+        // جديد: لو البديل المختار ما عاد بالقائمة (صار معطّل) منفك اختياره
+        if (keepSelection && !result.any((t) => t.id == previousSelection)) {
+          selectedSubstituteId = null;
+        }
       });
     } catch (_) {
       if (!mounted) return;
@@ -227,6 +238,11 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
         message: 'تم إرسال طلب الغياب بنجاح، وسيتم إشعارك عند مراجعته',
       );
     } else {
+      // جديد: لو كان في بديل مختار، منحدّث قائمة البدلاء (ممكن يكون صار معطّل)
+      if (selectedSubstituteId != null) {
+        _loadSubstitutesForSelection(keepSelection: true);
+      }
+
       final error = context.read<AbsenceCubit>().state.actionError;
       showErrorDialog(
         context: context,

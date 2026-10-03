@@ -20,6 +20,28 @@ class AbsenceCubit extends Cubit<AbsenceState> {
   final Future<List<DailyChecklistItem>> Function(DateTime date)?
   sessionsFetcher;
 
+  /// تحويل أخطاء الباك إند المعروفة لرسائل عربية واضحة.
+  /// [substituteProposed] = true لما الطلب كان فيه بديل مقترح.
+  String _friendlyMessage(ApiException e, {bool substituteProposed = false}) {
+    final msg = e.message;
+
+    // POST /leave-requests: بديل معطّل -> 403 (SubstituteNotAllowed)
+    if (msg.contains('SubstituteNotAllowed') ||
+        (e.statusCode == 403 && substituteProposed)) {
+      return 'البديل المختار غير متاح حالياً، اختر بديلاً آخر';
+    }
+
+    // approve: أخطاء 409 الجديدة
+    if (msg.contains('SubstituteInactive')) {
+      return 'البديل المقترح لم يعد فعّالاً';
+    }
+    if (msg.contains('SessionCancelled')) {
+      return 'إحدى الحصص المرتبطة بالطلب أصبحت ملغاة';
+    }
+
+    return msg;
+  }
+
   /// جلب حصص يوم معين لعرضها بحقل "الحصة"
   Future<List<DailyChecklistItem>> loadSessionsForDate(DateTime date) async {
     final fetcher = sessionsFetcher;
@@ -70,7 +92,10 @@ class AbsenceCubit extends Cubit<AbsenceState> {
       emit(
         state.copyWith(
           actionStatus: AbsenceActionStatus.failure,
-          actionError: e.message,
+          actionError: _friendlyMessage(
+            e,
+            substituteProposed: proposedSubstituteTrainerId != null,
+          ),
         ),
       );
       return false;
@@ -111,7 +136,7 @@ class AbsenceCubit extends Cubit<AbsenceState> {
       emit(
         state.copyWith(
           actionStatus: AbsenceActionStatus.failure,
-          actionError: e.message,
+          actionError: _friendlyMessage(e),
         ),
       );
       return false;

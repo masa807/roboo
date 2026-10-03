@@ -1,20 +1,28 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-
+import 'repositories/notification_repository.dart';
 import 'core/network/api_client.dart';
 import 'core/network/storage/token_storage.dart';
+import 'core/network/notifications/notification_service.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/attendance_repository.dart';
+import 'repositories/device_repository.dart';
 import 'repositories/leave_request_repository.dart';
 import 'repositories/schedule_repository.dart';
 import 'theme/theme.dart';
-import 'screens/login_screen.dart';
 import 'blocs/auth/auth_bloc.dart';
 import 'blocs/auth/auth_event.dart';
 import 'blocs/auth/auth_gate.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Firebase + الإشعارات لازم يتهيأوا قبل runApp
+  await Firebase.initializeApp();
+  await NotificationService.instance.init();
+
   final tokenStorage = TokenStorage.instance;
   final apiClient = ApiClient(
     baseUrl: 'http://191.218.163.66:8180',
@@ -25,6 +33,8 @@ void main() {
   final leaveRequestRepository = LeaveRequestRepository(apiClient);
   final attendanceRepository = AttendanceRepository(apiClient);
   final scheduleRepository = ScheduleRepository(apiClient);
+  final deviceRepository = DeviceRepository(apiClient);
+  final notificationRepository = NotificationRepository(apiClient);
 
   runApp(
     MultiRepositoryProvider(
@@ -36,6 +46,10 @@ void main() {
           value: attendanceRepository,
         ),
         RepositoryProvider<ScheduleRepository>.value(value: scheduleRepository),
+        RepositoryProvider<DeviceRepository>.value(value: deviceRepository),
+        RepositoryProvider<NotificationRepository>.value(
+          value: notificationRepository,
+        ),
       ],
       child: BlocProvider(
         create: (_) =>

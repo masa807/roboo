@@ -80,7 +80,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: 70,
                           height: 70,
                           decoration: const BoxDecoration(
-                            color: AppColors.primary2,
+                            color: AppColors.primary1, // تغيّر
                             shape: BoxShape.circle,
                           ),
                           child: const Icon(
@@ -99,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        'بوابة الدخول للكادر الأكاديمي',
+                        'بوابة تسجيل الحضور للكادر الأكاديمي',
                         textAlign: TextAlign.center,
                         style: textTheme.bodySmall,
                       ),
@@ -198,7 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           return ElevatedButton(
                             onPressed: loading ? null : _handleLogin,
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary2,
+                              backgroundColor: AppColors.primary1, // تغيّر
                             ),
                             child: loading
                                 ? const SizedBox(

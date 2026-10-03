@@ -1,6 +1,11 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../core/network/notifications/notification_service.dart';
 import '../theme/color.dart';
 import '../utils/responsive.dart';
 import '../widget/navbar_widget.dart';
@@ -17,11 +22,15 @@ import '../blocs/schedule/schedule_cubit.dart';
 import '../blocs/stats/stats_cubit.dart';
 import '../blocs/auth/auth_bloc.dart';
 import '../blocs/auth/auth_state.dart';
+import '../repositories/device_repository.dart';
 import '../repositories/leave_request_repository.dart';
 import '../repositories/attendance_repository.dart';
 import '../repositories/schedule_repository.dart';
 import '../repositories/stats_repository.dart';
 import '../blocs/auth/auth_event.dart';
+import '../blocs/notifications/notifications_cubit.dart';
+import '../repositories/notification_repository.dart';
+import '../screens/notifications_screen.dart';
 
 /// الشاشة الأم يلي بتحمل الأربع تابات، Scaffold وحيد بكل التطبيق
 /// (AppBar متغير حسب التاب + BottomNav ثابت + Drawer جانبي)
@@ -33,7 +42,8 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
+  static const int _requestsTabIndex = 2;
   static const int _statsTabIndex = 3;
 
   int _currentIndex = 0;
@@ -41,6 +51,14 @@ class _MainShellState extends State<MainShell> {
 
   StatsCubit? _statsCubit;
   bool _statsLoaded = false;
+
+  late final NotificationsCubit _notificationsCubit;
+
+  StreamSubscription<Map<String, dynamic>>? _tapSub;
+  StreamSubscription<String>? _tokenSub;
+  StreamSubscription<RemoteMessage>? _foregroundSub;
+
+  String get _platform => Platform.isIOS ? 'ios' : 'android';
 
   String _requireTrainerId(BuildContext context) {
     final user = context.read<AuthBloc>().state.user;
@@ -51,8 +69,114 @@ class _MainShellState extends State<MainShell> {
     return trainerId;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    // كيوبت الإشعارات مشترك بين الشارة وشاشة القائمة
+    _notificationsCubit = NotificationsCubit(
+      context.read<NotificationRepository>(),
+    )..loadUnreadCount();
+
+    // وصل إشعار والتطبيق مفتوح -> بنحدّث الشارة
+    _foregroundSub = FirebaseMessaging.onMessage.listen((_) {
+      _notificationsCubit.loadUnreadCount();
+    });
+
+    // ضغط على إشعار والتطبيق شغّال (foreground أو background)
+    _tapSub = NotificationService.instance.onNotificationTap.listen(
+      _handleNotificationTap,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // التطبيق كان مسكّر تماماً وانفتح من إشعار
+      final initial = await NotificationService.instance
+          .getInitialMessageData();
+      if (initial != null && mounted) _handleNotificationTap(initial);
+
+      await _registerDevice();
+    });
+  }
+
+  /// رجوع التطبيق من الخلفية -> تحديث الشارة
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _notificationsCubit.loadUnreadCount();
+    }
+  }
+
+  /// طلب الإذن + جلب التوكن + تسجيله عند السيرفر
+  Future<void> _registerDevice() async {
+    try {
+      final ns = NotificationService.instance;
+      if (!await ns.requestPermission()) return;
+
+      final token = await ns.getToken();
+      if (token == null || !mounted) return;
+
+      final repo = context.read<DeviceRepository>();
+      await repo.registerToken(token, _platform);
+
+      // لو التوكن تجدد، بنسجله من جديد
+      _tokenSub = ns.onTokenRefresh.listen((t) {
+        repo.registerToken(t, _platform).catchError((_) {});
+      });
+    } catch (e) {
+      // فشل تسجيل الإشعارات ما لازم يعطل التطبيق
+      debugPrint('Notification registration failed: $e');
+    }
+  }
+
+  /// لازم يتنفذ قبل AuthLogoutRequested لأن التوكن بينمسح بعد الخروج
+  Future<void> _unregisterDevice() async {
+    try {
+      final ns = NotificationService.instance;
+      final token = await ns.getToken();
+      if (token != null && mounted) {
+        await context
+            .read<DeviceRepository>()
+            .unregisterToken(token)
+            .timeout(const Duration(seconds: 3));
+      }
+      await ns.deleteToken();
+    } catch (e) {
+      debugPrint('Notification unregister failed: $e');
+    }
+  }
+
+  /// حسب نوع الإشعار بنفتح التاب المناسب
+  void _handleNotificationTap(Map<String, dynamic> data) {
+    if (!mounted) return;
+    switch (data['type']) {
+      case 'leave_request':
+        _selectTab(_requestsTabIndex);
+        break;
+      default:
+        break;
+    }
+  }
+
+  /// فتح شاشة قائمة الإشعارات من أيقونة الجرس
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => BlocProvider.value(
+          value: _notificationsCubit,
+          child: NotificationsScreen(
+            onOpen: (n) => _handleNotificationTap({'type': n.type, ...?n.data}),
+          ),
+        ),
+      ),
+    );
+  }
+
   /// بيتنفذ بعد ما المستخدم يأكد من حوار تسجيل الخروج (الحوار جوّا الـ Drawer)
-  void _logout() {
+  Future<void> _logout() async {
+    await _unregisterDevice();
+    if (!mounted) return;
     context.read<AuthBloc>().add(const AuthLogoutRequested());
   }
 
@@ -67,6 +191,11 @@ class _MainShellState extends State<MainShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _tapSub?.cancel();
+    _tokenSub?.cancel();
+    _foregroundSub?.cancel();
+    _notificationsCubit.close();
     _statsCubit?.close();
     super.dispose();
   }
@@ -167,13 +296,28 @@ class _MainShellState extends State<MainShell> {
           ),
           actions: _currentIndex == 0
               ? [
-                  IconButton(
-                    icon: Icon(
-                      Icons.notifications_outlined,
-                      color: Colors.white,
-                      size: context.r(24),
-                    ),
-                    onPressed: () {},
+                  BlocBuilder<NotificationsCubit, NotificationsState>(
+                    bloc: _notificationsCubit,
+                    buildWhen: (prev, curr) =>
+                        prev.unreadCount != curr.unreadCount,
+                    builder: (context, state) {
+                      return IconButton(
+                        icon: Badge(
+                          isLabelVisible: state.unreadCount > 0,
+                          label: Text(
+                            state.unreadCount > 99
+                                ? '99+'
+                                : '${state.unreadCount}',
+                          ),
+                          child: Icon(
+                            Icons.notifications_outlined,
+                            color: Colors.white,
+                            size: context.r(24),
+                          ),
+                        ),
+                        onPressed: _openNotifications,
+                      );
+                    },
                   ),
                 ]
               : null,
