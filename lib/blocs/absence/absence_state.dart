@@ -8,6 +8,8 @@ enum AbsenceActionStatus { idle, submitting, success, failure }
 
 class AbsenceState {
   final AbsenceStatus status;
+  final bool hasMore;
+  final bool loadingMore;
   final List<LeaveRequestModel> requests;
   final String? errorMessage;
 
@@ -16,6 +18,8 @@ class AbsenceState {
 
   const AbsenceState({
     this.status = AbsenceStatus.initial,
+    this.hasMore = false,
+    this.loadingMore = false,
     this.requests = const [],
     this.errorMessage,
     this.actionStatus = AbsenceActionStatus.idle,
@@ -24,6 +28,8 @@ class AbsenceState {
 
   AbsenceState copyWith({
     AbsenceStatus? status,
+    bool? hasMore,
+    bool? loadingMore,
     List<LeaveRequestModel>? requests,
     String? errorMessage,
     AbsenceActionStatus? actionStatus,
@@ -31,6 +37,8 @@ class AbsenceState {
   }) {
     return AbsenceState(
       status: status ?? this.status,
+      hasMore: hasMore ?? this.hasMore,
+      loadingMore: loadingMore ?? this.loadingMore,
       requests: requests ?? this.requests,
       errorMessage: errorMessage,
       actionStatus: actionStatus ?? this.actionStatus,

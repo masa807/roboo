@@ -1,3 +1,5 @@
+import '../core/school_time.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -80,7 +82,9 @@ class _CalendarBottomSheetState extends State<CalendarBottomSheet> {
     for (int d = 1; d <= daysInMonth; d++) {
       cells.add(DateTime(_visibleMonth.year, _visibleMonth.month, d));
     }
-    while (cells.length % 7 != 0) cells.add(null);
+    while (cells.length % 7 != 0) {
+      cells.add(null);
+    }
     return cells;
   }
 
@@ -189,7 +193,7 @@ class _CalendarBottomSheetState extends State<CalendarBottomSheet> {
                   if (date == null) return const SizedBox.shrink();
 
                   final isSelected = _isSameDay(date, selectedDay);
-                  final isToday = _isSameDay(date, DateTime.now());
+                  final isToday = _isSameDay(date, SchoolTime.now());
 
                   return Padding(
                     padding: EdgeInsets.all(context.w(3)),

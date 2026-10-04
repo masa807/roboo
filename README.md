@@ -1,16 +1,38 @@
-# roboo_app
+# Roboo Mobile
 
-A new Flutter project.
+تطبيق المدربين Flutter. تحديث 4 تشرين الأول 2026 يوافق الباك المحلي المحدث ويحافظ على تصميم الشاشات وألوانها والتنقل الأساسي.
 
-## Getting Started
+## التشغيل
 
-This project is a starting point for a Flutter application.
+```powershell
+flutter pub get
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:5125 --dart-define=ENABLE_PUSH=false
+```
 
-A few resources to get you started if this is your first Flutter project:
+العنوان الافتراضي لمحاكي Android للوصول إلى باك الكمبيوتر. للهاتف الفعلي استخدم عنوان الكمبيوتر في الشبكة وأتح منفذ الباك. مرر أصل العنوان **دون `/api`**. HTTP مسموح في Android debug فقط؛ release يحتاج HTTPS صريحًا:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```powershell
+flutter build apk --release --dart-define=API_BASE_URL=https://YOUR_API_HOST --dart-define=ENABLE_PUSH=true
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+لم تُنشأ أسرار أو حسابات أو مفاتيح نشر. جهّز Firebase وAPNs والتوقيع المتوافق مع معرّفات التطبيق في بيئتك. إعداد Android الحالي يستخدم توقيع debug لنسخة release؛ استبدله بمفتاح الإنتاج قبل التوزيع. iOS يحتاج تفعيل Push Notifications وAPNs وملف Firebase المناسب.
+
+## التغييرات
+
+- دخول Trainer فقط؛ refresh تلقائي قبل انتهاء JWT بدقيقة عند الطلب، مع تجديد واحد مشترك ومحاولة واحدة بعد 401. حفظ التوكنين معًا في التخزين الآمن ومنع الردود المتأخرة بعد الخروج.
+- عزل الجلسة حسب عنوان الباك؛ هذا التحديث يتطلب تسجيل الدخول مرة واحدة لأن المفاتيح القديمة لا تُنقل بين السيرفرات تلقائيًا. الخروج يطلب إبطال refresh token وإزالة جهاز الإشعارات، ويكتمل محليًا دون شبكة.
+- تصحيح `selectionMode`: الحصص المحددة 0 واليوم الكامل 1؛ الحالة الملغاة؛ البدلاء المتاحون فقط؛ مصفوفة `sessionIds` بصيغة ASP.NET؛ تحميل المزيد للطلبات.
+- توقيت المدرسة `Asia/Damascus` باستخدام IANA، وإرسال وقت الحضور UTC. التحقق من نافذة الإجازة 48 ساعة إلى 15 يومًا؛ الباك المرجع النهائي.
+- الإحصاءات الشهرية بطلب واحد. تجاهل الردود القديمة عند تغيير الشهر/التاريخ. عرض الحصص المستبدلة والملغاة والحالات غير المعروفة بشكل صحيح.
+- حفظ محاولة الحضور مشفرة قبل إرسالها، بنفس UUID والوقت والموقع عند المزامنة، مع عزلها حسب الحساب والسيرفر. المزامنة عند تحديث الحضور والعودة للتطبيق، وليست خدمة تعمل والتطبيق مغلق.
+- لا نجاح للحضور قبل تأكيد الباك. المرفوض يظهر برسالته وغير المؤكد يبقى معلقًا. المحاولة دون اتصال تحتاج جدولًا حُمّل بالفعل؛ لا يوجد تنزيل دائم لكل الجداول offline.
+- فشل Firebase الاختياري لا يمنع فتح التطبيق؛ صندوق الإشعارات مستقل عن push. تسجيل الجهاز يُعاد عند العودة للتطبيق. إشعار الإجازة يجلب الطلب نفسه؛ إشعار حصة بلا تاريخ يفتح حضور اليوم.
+- إضافة INTERNET إلى Android main manifest وقناة الإشعارات الافتراضية.
+
+## التصميم والتحقق
+
+الهوية البصرية وتخطيطات الشاشات محفوظة. الإضافات الضرورية فقط: تحميل المزيد، رسالة المحاولات المعلقة، وتفاصيل الإجازة عند فتح إشعارها باستخدام الحوارات الموجودة.
+
+لم تُضف وحدات اختبار. قبل التوزيع جرّب على جهاز فعلي: GPS، تجديد الجلسة، الحضور مع انقطاع الشبكة، وFCM في المقدمة والخلفية وبعد الإغلاق. تعتمد هذه الحالات على الجهاز وإعداد Firebase والباك؛ التحليل الساكن وحده لا يثبتها.
+
+نجح حل الاعتماديات والتحليل الساكن لكل `lib` باستخدام Dart 3.13.5 ومكتبات Flutter 3.47.6، بلا errors أو warnings. بقيت 29 ملاحظة info قديمة مثل `withOpacity` واسم ملف `mainShell.dart`؛ لم تُغيّر ملفات الألوان والتصميم لأجلها. لم يُبنَ APK/IPA ولم تُنفّذ تجربة جهاز في هذه الجلسة. ملف القفل محدّث؛ نفّذ `flutter pub get` في بيئة Flutter لديك قبل التشغيل.

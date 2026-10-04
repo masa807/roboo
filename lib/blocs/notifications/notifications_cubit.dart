@@ -54,12 +54,16 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   final NotificationRepository _repository;
   static const int _pageSize = 20;
+  int _generation = 0;
+  int _countGeneration = 0;
 
   /// جلب عدد غير المقروء فقط (للشارة على الجرس)
   Future<void> loadUnreadCount() async {
+    if (isClosed) return;
+    final generation = ++_countGeneration;
     try {
       final count = await _repository.getUnreadCount();
-      if (isClosed) return;
+      if (isClosed || generation != _countGeneration) return;
       emit(state.copyWith(unreadCount: count));
     } catch (_) {
       // الشارة مو أساسية، بنتجاهل الخطأ
@@ -68,13 +72,17 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   /// تحميل أول صفحة
   Future<void> load() async {
-    emit(state.copyWith(status: NotificationsStatus.loading));
+    if (isClosed) return;
+    final generation = ++_generation;
+    emit(
+      state.copyWith(status: NotificationsStatus.loading, isLoadingMore: false),
+    );
     try {
       final result = await _repository.getNotifications(
         page: 1,
         pageSize: _pageSize,
       );
-      if (isClosed) return;
+      if (isClosed || generation != _generation) return;
       emit(
         NotificationsState(
           status: NotificationsStatus.success,
@@ -86,7 +94,7 @@ class NotificationsCubit extends Cubit<NotificationsState> {
       );
       loadUnreadCount();
     } catch (_) {
-      if (isClosed) return;
+      if (isClosed || generation != _generation) return;
       emit(
         state.copyWith(
           status: NotificationsStatus.failure,
@@ -98,12 +106,15 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   /// تحديث بالسحب (ما بيرجع لحالة loading عشان القائمة ما تفرغ)
   Future<void> refresh() async {
+    if (isClosed) return;
+    final generation = ++_generation;
+    emit(state.copyWith(isLoadingMore: false));
     try {
       final result = await _repository.getNotifications(
         page: 1,
         pageSize: _pageSize,
       );
-      if (isClosed) return;
+      if (isClosed || generation != _generation) return;
       emit(
         NotificationsState(
           status: NotificationsStatus.success,
@@ -121,34 +132,42 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
   /// تحميل الصفحة التالية عند الوصول لآخر القائمة
   Future<void> loadMore() async {
-    if (state.isLoadingMore ||
+    if (isClosed ||
+        state.isLoadingMore ||
         !state.hasMore ||
         state.status != NotificationsStatus.success) {
       return;
     }
+    final generation = _generation;
     emit(state.copyWith(isLoadingMore: true));
     try {
       final result = await _repository.getNotifications(
         page: state.page + 1,
         pageSize: _pageSize,
       );
-      if (isClosed) return;
+      if (isClosed || generation != _generation) return;
       emit(
         state.copyWith(
-          items: [...state.items, ...result.items],
+          items: [
+            ...state.items,
+            ...result.items.where(
+              (item) => !state.items.any((existing) => existing.id == item.id),
+            ),
+          ],
           page: result.page,
           totalCount: result.totalCount,
           isLoadingMore: false,
         ),
       );
     } catch (_) {
-      if (isClosed) return;
+      if (isClosed || generation != _generation) return;
       emit(state.copyWith(isLoadingMore: false));
     }
   }
 
   /// تمييز إشعار كمقروء: تحديث فوري، وإذا فشل الطلب منرجّع القديم
   Future<void> markAsRead(String id) async {
+    if (isClosed) return;
     final previousItems = state.items;
     final previousCount = state.unreadCount;
 
@@ -167,17 +186,19 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
     try {
       await _repository.markAsRead(id);
+      await loadUnreadCount();
     } catch (_) {
       if (isClosed) return;
-      emit(state.copyWith(items: previousItems, unreadCount: previousCount));
+      await load();
+      await loadUnreadCount();
     }
   }
 
   /// تمييز الكل كمقروء
   Future<void> markAllAsRead() async {
+    if (isClosed) return;
     if (state.unreadCount == 0) return;
     final previousItems = state.items;
-    final previousCount = state.unreadCount;
 
     emit(
       state.copyWith(
@@ -188,9 +209,11 @@ class NotificationsCubit extends Cubit<NotificationsState> {
 
     try {
       await _repository.markAllAsRead();
+      await loadUnreadCount();
     } catch (_) {
       if (isClosed) return;
-      emit(state.copyWith(items: previousItems, unreadCount: previousCount));
+      await load();
+      await loadUnreadCount();
     }
   }
 }

@@ -18,8 +18,8 @@ class JwtUtils {
   static bool isExpired(String token) {
     final payload = decodePayload(token);
     final exp = payload['exp'] as int?;
-    if (exp == null) return false;
+    if (exp == null) return true;
     final expiry = DateTime.fromMillisecondsSinceEpoch(exp * 1000);
-    return DateTime.now().isAfter(expiry);
+    return DateTime.now().add(const Duration(seconds: 60)).isAfter(expiry);
   }
 }

@@ -1,19 +1,24 @@
-/// حالة الحصة بالجدول الأسبوعي — نفس ترميز daily-checklist تقريباً
-/// (0 = مجدولة، 1 = جارية، 2 = منتهية). عدّليها لو الباك اند مختلف.
-enum WeeklySessionStatus { scheduled, active, done }
+enum WeeklySessionStatus {
+  scheduled,
+  completed,
+  cancelled,
+  pendingSubstitute,
+  substituted,
+  unknown,
+}
 
 extension WeeklySessionStatusX on WeeklySessionStatus {
-  static WeeklySessionStatus fromCode(int code) {
-    switch (code) {
-      case 1:
-        return WeeklySessionStatus.active;
-      case 2:
-        return WeeklySessionStatus.done;
-      case 0:
-      default:
-        return WeeklySessionStatus.scheduled;
-    }
-  }
+  static WeeklySessionStatus fromCode(int code) => code >= 0 && code <= 4
+      ? WeeklySessionStatus.values[code]
+      : WeeklySessionStatus.unknown;
+  String get label => [
+    'مجدولة',
+    'مكتملة',
+    'ملغاة',
+    'بانتظار بديل',
+    'مسندة لبديل',
+    'غير معروفة',
+  ][index];
 }
 
 /// عنصر حصة واحدة من GET /api/trainers/{trainerId}/weekly-schedule
@@ -27,6 +32,7 @@ class WeeklyScheduleItem {
   final String roomName;
   final WeeklySessionStatus status;
   final bool isOriginal;
+  final bool isReplaced;
 
   const WeeklyScheduleItem({
     required this.sessionId,
@@ -38,6 +44,7 @@ class WeeklyScheduleItem {
     required this.roomName,
     required this.status,
     required this.isOriginal,
+    this.isReplaced = false,
   });
 
   String get displayTimeRange => '$startTime - $endTime';
@@ -53,6 +60,7 @@ class WeeklyScheduleItem {
       roomName: json['roomName'] as String? ?? '',
       status: WeeklySessionStatusX.fromCode(json['status'] as int? ?? 0),
       isOriginal: json['isOriginal'] as bool? ?? true,
+      isReplaced: json['isReplaced'] as bool? ?? false,
     );
   }
 }

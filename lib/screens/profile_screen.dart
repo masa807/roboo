@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:roboo_app/screens/mainShell.dart';
+
 import '../theme/color.dart';
 import '../widget/app_background.dart';
 import '../utils/responsive.dart';
 import '../blocs/auth/auth_bloc.dart';
-import '../blocs/auth/auth_state.dart';
 import '../models/auth_models.dart';
 
 /// شاشة الملف الشخصي
@@ -49,11 +48,7 @@ class ProfileScreen extends StatelessWidget {
             size: context.r(24),
           ),
           onPressed: () {
-            Navigator.pushAndRemoveUntil(
-              context,
-              MaterialPageRoute(builder: (context) => const MainShell()),
-              (route) => false,
-            );
+            Navigator.of(context).pop();
           },
         ),
         title: Text(

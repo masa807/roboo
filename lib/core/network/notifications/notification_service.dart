@@ -16,7 +16,13 @@ class NotificationService {
   NotificationService._();
   static final NotificationService instance = NotificationService._();
 
-  final FirebaseMessaging _messaging = FirebaseMessaging.instance;
+  FirebaseMessaging get _messaging => FirebaseMessaging.instance;
+  bool get isAvailable => _initialized;
+  bool _signedIn = false;
+  void setSignedIn(bool value) {
+    _signedIn = value;
+  }
+
   final FlutterLocalNotificationsPlugin _local =
       FlutterLocalNotificationsPlugin();
 
@@ -40,7 +46,6 @@ class NotificationService {
 
   Future<void> init() async {
     if (_initialized) return;
-    _initialized = true;
 
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
@@ -52,7 +57,11 @@ class NotificationService {
       onDidReceiveNotificationResponse: (response) {
         final payload = response.payload;
         if (payload == null || payload.isEmpty) return;
-        _tapController.add(Map<String, dynamic>.from(jsonDecode(payload)));
+        try {
+          _tapController.add(
+            Map<String, dynamic>.from(jsonDecode(payload) as Map),
+          );
+        } catch (_) {}
       },
     );
 
@@ -62,8 +71,12 @@ class NotificationService {
         >()
         ?.createNotificationChannel(_channel);
 
+    _initialized = true;
+
     // التطبيق مفتوح: FCM ما بيعرض شي لحاله، فنعرضه نحن.
-    FirebaseMessaging.onMessage.listen(_showForeground);
+    FirebaseMessaging.onMessage.listen((message) {
+      unawaited(_showForeground(message).catchError((Object _) {}));
+    });
 
     // التطبيق بالخلفية والمدرب ضغط عالإشعار.
     FirebaseMessaging.onMessageOpenedApp.listen((m) {
@@ -74,11 +87,22 @@ class NotificationService {
   /// استدعيها بعد ما التطبيق يبني أول frame لو بدك تعالج الإشعار
   /// اللي فتح التطبيق وهو مسكّر تماماً.
   Future<Map<String, dynamic>?> getInitialMessageData() async {
-    final message = await _messaging.getInitialMessage();
-    return message == null ? null : Map<String, dynamic>.from(message.data);
+    if (!_initialized) return null;
+    try {
+      final message = await _messaging.getInitialMessage();
+      if (message != null) return Map<String, dynamic>.from(message.data);
+      final launch = await _local.getNotificationAppLaunchDetails();
+      final payload = launch?.notificationResponse?.payload;
+      return launch?.didNotificationLaunchApp == true && payload != null
+          ? Map<String, dynamic>.from(jsonDecode(payload) as Map)
+          : null;
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<bool> requestPermission() async {
+    if (!_initialized) return false;
     final settings = await _messaging.requestPermission(
       alert: true,
       badge: true,
@@ -88,17 +112,33 @@ class NotificationService {
         settings.authorizationStatus == AuthorizationStatus.provisional;
   }
 
-  Future<String?> getToken() => _messaging.getToken();
+  Future<String?> getToken() async =>
+      _initialized ? await _messaging.getToken() : null;
 
   /// استدعيها عند تسجيل الخروج.
-  Future<void> deleteToken() => _messaging.deleteToken();
+  Future<void> deleteToken() async {
+    if (_initialized) {
+      try {
+        await _messaging.deleteToken();
+      } finally {
+        await _local.cancelAll();
+      }
+    }
+  }
 
   Future<void> _showForeground(RemoteMessage message) async {
+    if (!_signedIn) return;
     final notification = message.notification;
     if (notification == null) return;
 
     await _local.show(
-      id: notification.hashCode,
+      id:
+          (message.data['notificationId'] ??
+                  message.messageId ??
+                  notification.title ??
+                  '')
+              .hashCode &
+          0x7fffffff,
       title: notification.title,
       body: notification.body,
       notificationDetails: NotificationDetails(

@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../core/network/notifications/notification_service.dart';
+import '../core/school_time.dart';
 import '../theme/color.dart';
 import '../utils/responsive.dart';
 import '../widget/navbar_widget.dart';
@@ -15,7 +16,6 @@ import '../screens/schedule_screen.dart';
 import '../screens/request_screen.dart';
 import '../screens/stats_screen.dart';
 import '../screens/profile_screen.dart';
-import '../screens/login_screen.dart';
 import '../blocs/absence/absence_cubit.dart';
 import '../blocs/attendance/attendance_cubit.dart';
 import '../blocs/schedule/schedule_cubit.dart';
@@ -31,6 +31,8 @@ import '../blocs/auth/auth_event.dart';
 import '../blocs/notifications/notifications_cubit.dart';
 import '../repositories/notification_repository.dart';
 import '../screens/notifications_screen.dart';
+import '../widget/app_dialoge.dart';
+import '../models/leave_request_model.dart';
 
 /// الشاشة الأم يلي بتحمل الأربع تابات، Scaffold وحيد بكل التطبيق
 /// (AppBar متغير حسب التاب + BottomNav ثابت + Drawer جانبي)
@@ -50,7 +52,10 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   List<Widget>? _tabs;
 
   StatsCubit? _statsCubit;
-  bool _statsLoaded = false;
+  AttendanceCubit? _attendanceCubit;
+  bool _registering = false;
+  int _notificationRequest = 0;
+  DateTime _lastDay = SchoolTime.now();
 
   late final NotificationsCubit _notificationsCubit;
 
@@ -80,9 +85,11 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     )..loadUnreadCount();
 
     // وصل إشعار والتطبيق مفتوح -> بنحدّث الشارة
-    _foregroundSub = FirebaseMessaging.onMessage.listen((_) {
-      _notificationsCubit.loadUnreadCount();
-    });
+    if (NotificationService.instance.isAvailable) {
+      _foregroundSub = FirebaseMessaging.onMessage.listen((_) {
+        _notificationsCubit.loadUnreadCount();
+      });
+    }
 
     // ضغط على إشعار والتطبيق شغّال (foreground أو background)
     _tapSub = NotificationService.instance.onNotificationTap.listen(
@@ -91,6 +98,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       // التطبيق كان مسكّر تماماً وانفتح من إشعار
+      if (!mounted) return;
       final initial = await NotificationService.instance
           .getInitialMessageData();
       if (initial != null && mounted) _handleNotificationTap(initial);
@@ -104,57 +112,105 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _notificationsCubit.loadUnreadCount();
+      final now = SchoolTime.now();
+      if (now.year != _lastDay.year ||
+          now.month != _lastDay.month ||
+          now.day != _lastDay.day) {
+        _attendanceCubit?.loadToday();
+        _lastDay = now;
+      } else if (_attendanceCubit != null) {
+        _attendanceCubit!.loadDate(_attendanceCubit!.state.selectedDate);
+      }
+      _registerDevice();
     }
   }
 
   /// طلب الإذن + جلب التوكن + تسجيله عند السيرفر
   Future<void> _registerDevice() async {
+    if (_registering || !mounted || !NotificationService.instance.isAvailable) {
+      return;
+    }
+    _registering = true;
     try {
       final ns = NotificationService.instance;
+      final repo = context.read<DeviceRepository>();
+      _tokenSub ??= ns.onTokenRefresh.listen((t) {
+        if (mounted) repo.registerToken(t, _platform).catchError((_) {});
+      });
       if (!await ns.requestPermission()) return;
 
       final token = await ns.getToken();
       if (token == null || !mounted) return;
 
-      final repo = context.read<DeviceRepository>();
       await repo.registerToken(token, _platform);
-
-      // لو التوكن تجدد، بنسجله من جديد
-      _tokenSub = ns.onTokenRefresh.listen((t) {
-        repo.registerToken(t, _platform).catchError((_) {});
-      });
     } catch (e) {
       // فشل تسجيل الإشعارات ما لازم يعطل التطبيق
-      debugPrint('Notification registration failed: $e');
-    }
-  }
-
-  /// لازم يتنفذ قبل AuthLogoutRequested لأن التوكن بينمسح بعد الخروج
-  Future<void> _unregisterDevice() async {
-    try {
-      final ns = NotificationService.instance;
-      final token = await ns.getToken();
-      if (token != null && mounted) {
-        await context
-            .read<DeviceRepository>()
-            .unregisterToken(token)
-            .timeout(const Duration(seconds: 3));
-      }
-      await ns.deleteToken();
-    } catch (e) {
-      debugPrint('Notification unregister failed: $e');
+      // A later resume retries registration.
+    } finally {
+      _registering = false;
     }
   }
 
   /// حسب نوع الإشعار بنفتح التاب المناسب
   void _handleNotificationTap(Map<String, dynamic> data) {
     if (!mounted) return;
-    switch (data['type']) {
-      case 'leave_request':
-        _selectTab(_requestsTabIndex);
-        break;
-      default:
-        break;
+    Navigator.of(context).popUntil((route) => route.isFirst);
+    final notificationId = data['notificationId']?.toString();
+    if (notificationId != null && notificationId.isNotEmpty) {
+      unawaited(_markOpenedNotification(notificationId));
+    }
+    final type = data['type']?.toString() ?? '';
+    if (data['leaveRequestId'] != null ||
+        type.contains('LeaveRequest') ||
+        type == 'SubstituteRequested' ||
+        type == 'SubstituteAssigned' ||
+        type == 'leave_request') {
+      _selectTab(_requestsTabIndex);
+      final id = data['leaveRequestId']?.toString();
+      if (id != null && id.isNotEmpty) _openLeaveNotification(id);
+    } else if (type.contains('Session') || type.contains('CheckIn')) {
+      _selectTab(0);
+      final date = DateTime.tryParse(data['date']?.toString() ?? '');
+      if (date != null) {
+        _attendanceCubit?.loadDate(date);
+      } else {
+        _attendanceCubit?.loadToday();
+      }
+    }
+    _notificationsCubit.loadUnreadCount();
+  }
+
+  Future<void> _openLeaveNotification(String id) async {
+    final request = ++_notificationRequest;
+    try {
+      final leave = await context
+          .read<LeaveRequestRepository>()
+          .getLeaveRequestById(id);
+      if (!mounted || request != _notificationRequest) return;
+      final date = leave.targetDate;
+      showInfoDialog(
+        context: context,
+        title: 'تفاصيل طلب الإجازة',
+        message:
+            '${leave.status.label}\n${date == null ? 'حصص محددة' : '${date.day}/${date.month}/${date.year}'}\n${leave.reason}',
+      );
+    } catch (_) {
+      if (!mounted || request != _notificationRequest) return;
+      showErrorDialog(
+        context: context,
+        title: 'تعذر فتح الطلب',
+        message:
+            'قد لا يكون الطلب متاحًا لهذا الحساب. يمكنك إعادة المحاولة من الإشعارات.',
+      );
+    }
+  }
+
+  Future<void> _markOpenedNotification(String id) async {
+    try {
+      await context.read<NotificationRepository>().markAsRead(id);
+      if (mounted) await _notificationsCubit.loadUnreadCount();
+    } catch (_) {
+      // Opening the target remains possible when marking the notification fails.
     }
   }
 
@@ -175,7 +231,8 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
 
   /// بيتنفذ بعد ما المستخدم يأكد من حوار تسجيل الخروج (الحوار جوّا الـ Drawer)
   Future<void> _logout() async {
-    await _unregisterDevice();
+    await _tokenSub?.cancel();
+    _tokenSub = null;
     if (!mounted) return;
     context.read<AuthBloc>().add(const AuthLogoutRequested());
   }
@@ -183,10 +240,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   /// تبديل التاب. الإحصائيات بتتحمّل أول مرة بتنفتح فيها بس
   void _selectTab(int i) {
     setState(() => _currentIndex = i);
-    if (i == _statsTabIndex && !_statsLoaded) {
-      _statsLoaded = true;
-      _statsCubit?.load();
-    }
+    if (i == _statsTabIndex) _statsCubit?.refresh();
   }
 
   @override
@@ -197,6 +251,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
     _foregroundSub?.cancel();
     _notificationsCubit.close();
     _statsCubit?.close();
+    _attendanceCubit?.close();
     super.dispose();
   }
 
@@ -215,13 +270,14 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
         trainerId: _requireTrainerId(context),
       );
 
+      _attendanceCubit = AttendanceCubit(
+        context.read<AttendanceRepository>(),
+        trainerId: _requireTrainerId(context),
+      );
       _tabs = [
         // 0 - الرئيسية
-        BlocProvider(
-          create: (_) => AttendanceCubit(
-            context.read<AttendanceRepository>(),
-            trainerId: _requireTrainerId(context),
-          ),
+        BlocProvider.value(
+          value: _attendanceCubit!,
           child: const HomeContent(),
         ),
         // 1 - الجدول
@@ -260,10 +316,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
           prev.status != curr.status &&
           curr.status == AuthStatus.unauthenticated,
       listener: (context, state) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const LoginScreen()),
-          (route) => false,
-        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
       },
       child: Scaffold(
         backgroundColor: Colors.white,

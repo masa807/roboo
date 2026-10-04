@@ -1,3 +1,5 @@
+import '../core/school_time.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -33,6 +35,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
   List<SubstituteTrainerModel> availableSubstitutes = [];
   String? selectedSubstituteId;
   bool loadingSubstitutes = false;
+  int _substituteRequest = 0;
 
   static const List<String> _arabicWeekDays = [
     'الاثنين',
@@ -69,6 +72,7 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<AbsenceCubit>().loadRequests();
     });
   }
@@ -80,11 +84,20 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
   }
 
   Future<void> _pickDate() async {
+    final now = SchoolTime.now();
+    final first = DateTime(now.year, now.month, now.day + 2);
+    final last = DateTime(now.year, now.month, now.day + 15);
+    final initial =
+        selectedDate != null &&
+            !selectedDate!.isBefore(first) &&
+            !selectedDate!.isAfter(last)
+        ? selectedDate!
+        : first;
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: selectedDate ?? DateTime.now(),
-      firstDate: DateTime(DateTime.now().year - 1),
-      lastDate: DateTime(DateTime.now().year + 1),
+      initialDate: initial,
+      firstDate: first,
+      lastDate: last,
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
@@ -102,11 +115,13 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       },
     );
 
-    if (picked != null) {
+    if (picked != null && mounted) {
+      _substituteRequest++;
       setState(() {
         selectedDate = picked;
         selectedSubstituteId = null;
         availableSubstitutes = [];
+        loadingSubstitutes = false;
         daySessions = [];
         selectedSessionValue = null;
         sessionsError = null;
@@ -126,14 +141,20 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       // لو المستخدم غيّر التاريخ وإحنا بننتظر، نتجاهل النتيجة القديمة
       if (selectedDate != date) return;
       setState(() {
-        daySessions = sessions;
+        daySessions = sessions
+            .where(
+              (s) =>
+                  s.sessionStatus != DailySessionStatus.cancelled &&
+                  !s.isCheckedIn,
+            )
+            .toList();
         loadingSessions = false;
         // اختيار افتراضي: كل الحصص إذا في حصص
-        selectedSessionValue = sessions.isEmpty ? null : _allDayValue;
+        selectedSessionValue = daySessions.isEmpty ? null : _allDayValue;
       });
       if (sessions.isNotEmpty) _loadSubstitutesForSelection();
     } catch (_) {
-      if (!mounted) return;
+      if (!mounted || selectedDate != date) return;
       setState(() {
         loadingSessions = false;
         sessionsError = 'حدث خطأ في جلب الحصص';
@@ -147,20 +168,29 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
   Future<void> _loadSubstitutesForSelection({
     bool keepSelection = false,
   }) async {
+    final generation = ++_substituteRequest;
     final ids = _selectedSessionIds;
-    if (ids.isEmpty) return;
+    if (ids.isEmpty) {
+      setState(() {
+        loadingSubstitutes = false;
+        availableSubstitutes = [];
+        selectedSubstituteId = null;
+      });
+      return;
+    }
 
     final previousSelection = selectedSubstituteId; // جديد
 
     setState(() {
       loadingSubstitutes = true;
+      sessionsError = null;
       if (!keepSelection) selectedSubstituteId = null; // جديد
     });
     try {
       final result = await context
           .read<AbsenceCubit>()
           .loadAvailableSubstitutes(ids);
-      if (!mounted) return;
+      if (!mounted || generation != _substituteRequest) return;
       setState(() {
         availableSubstitutes = result;
         loadingSubstitutes = false;
@@ -170,8 +200,13 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
         }
       });
     } catch (_) {
-      if (!mounted) return;
-      setState(() => loadingSubstitutes = false);
+      if (!mounted || generation != _substituteRequest) return;
+      setState(() {
+        loadingSubstitutes = false;
+        availableSubstitutes = [];
+        selectedSubstituteId = null;
+        sessionsError = 'تعذر جلب البدلاء، أعد اختيار الحصة للمحاولة.';
+      });
     }
   }
 
@@ -185,6 +220,25 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
 
   /// 1) تحقق من الحقول  2) حوار تأكيد  3) الإرسال الفعلي (_sendRequest)
   void _submit() {
+    if (loadingSessions || loadingSubstitutes) return;
+    if (selectedSubstituteId == null) {
+      _showMissingDataDialog('يرجى اختيار المدرب البديل.');
+      return;
+    }
+    final now = SchoolTime.now();
+    final chosen = daySessions.where(
+      (s) => _selectedSessionIds.contains(s.sessionTrainerId),
+    );
+    if (chosen.any((s) {
+      final start = SchoolTime.sessionStart(s.date, s.startTime);
+      return start.difference(now) < const Duration(hours: 48) ||
+          start.difference(now) > const Duration(days: 15);
+    })) {
+      _showMissingDataDialog(
+        'يجب تقديم الطلب قبل الحصة بـ48 ساعة على الأقل، و15 يومًا على الأكثر.',
+      );
+      return;
+    }
     if (selectedDate == null) {
       _showMissingDataDialog('الرجاء اختيار التاريخ');
       return;
@@ -377,7 +431,16 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
       );
     }
     return Column(
-      children: state.requests.map((r) => _buildRequestHistoryCard(r)).toList(),
+      children: [
+        ...state.requests.map((r) => _buildRequestHistoryCard(r)),
+        if (state.hasMore)
+          TextButton(
+            onPressed: state.loadingMore
+                ? null
+                : () => context.read<AbsenceCubit>().loadMore(),
+            child: Text(state.loadingMore ? 'جار التحميل…' : 'تحميل المزيد'),
+          ),
+      ],
     );
   }
 
@@ -389,6 +452,10 @@ class _AbsenceRequestContentState extends State<AbsenceRequestContent> {
         break;
       case LeaveRequestStatus.rejected:
         statusColor = Colors.red;
+        break;
+      case LeaveRequestStatus.cancelled:
+      case LeaveRequestStatus.unknown:
+        statusColor = Colors.grey;
         break;
       case LeaveRequestStatus.pending:
         statusColor = Colors.orange;

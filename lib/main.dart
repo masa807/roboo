@@ -1,7 +1,12 @@
+import 'package:flutter/foundation.dart';
+
+import 'core/school_time.dart';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+
 import 'repositories/notification_repository.dart';
 import 'core/network/api_client.dart';
 import 'core/network/storage/token_storage.dart';
@@ -19,13 +24,33 @@ import 'blocs/auth/auth_gate.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase + الإشعارات لازم يتهيأوا قبل runApp
-  await Firebase.initializeApp();
-  await NotificationService.instance.init();
+  SchoolTime.initialize();
+  if (const bool.fromEnvironment('ENABLE_PUSH', defaultValue: true)) {
+    try {
+      await Firebase.initializeApp().timeout(const Duration(seconds: 5));
+      await NotificationService.instance.init().timeout(
+        const Duration(seconds: 5),
+      );
+    } catch (_) {
+      /* Push is optional; the inbox and attendance remain available. */
+    }
+  }
+  const baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:5125',
+  );
+  final uri = Uri.tryParse(baseUrl);
+  if (uri == null ||
+      !uri.hasAuthority ||
+      !['http', 'https'].contains(uri.scheme) ||
+      (kReleaseMode && uri.scheme != 'https')) {
+    throw StateError('Set API_BASE_URL to the HTTPS backend URL for release.');
+  }
 
   final tokenStorage = TokenStorage.instance;
+  tokenStorage.configureServer(baseUrl);
   final apiClient = ApiClient(
-    baseUrl: 'http://191.218.163.66:8180',
+    baseUrl: baseUrl,
     tokenProvider: () => tokenStorage.getAccessToken(),
   );
 

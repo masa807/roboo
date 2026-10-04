@@ -1,3 +1,5 @@
+import '../core/school_time.dart';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
@@ -25,6 +27,7 @@ class _HomeContentState extends State<HomeContent> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       context.read<AttendanceCubit>().loadToday();
     });
   }
@@ -56,7 +59,7 @@ class _HomeContentState extends State<HomeContent> {
   }
 
   String _formatSelectedDate(DateTime date) {
-    final now = DateTime.now();
+    final now = SchoolTime.now();
     final isToday =
         date.year == now.year && date.month == now.month && date.day == now.day;
     if (isToday) return 'اليوم';
@@ -94,6 +97,14 @@ class _HomeContentState extends State<HomeContent> {
                 context.h(24),
               ),
               children: [
+                if (state.syncMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      state.syncMessage!,
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                  ),
                 // ===== هيدر (دايماً ظاهر) =====
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -300,6 +311,11 @@ class _SessionCard extends StatelessWidget {
   }
 
   Widget _buildTrailing(BuildContext context) {
+    if (session.sessionStatus == DailySessionStatus.cancelled ||
+        session.sessionStatus == DailySessionStatus.unknown) {
+      return Text(session.sessionStatus.label);
+    }
+
     // ✅ نجح التسجيل
     if (session.isCheckedIn) {
       return CircleAvatar(

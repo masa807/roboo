@@ -11,12 +11,18 @@ class LeaveRequestRepository {
   Future<List<LeaveRequestModel>> getTrainerLeaveRequests({
     required String trainerId,
     LeaveRequestStatus? status,
+    int page = 1,
   }) async {
     final response = await _client.get(
       '/api/trainers/$trainerId/leave-requests',
-      queryParameters: status != null ? {'status': status.code} : null,
+      queryParameters: {
+        'page': page,
+        'pageSize': 20,
+        if (status != null) 'status': status.code,
+      },
     );
-    final data = response.data as List<dynamic>;
+    final data =
+        (response.data as Map<String, dynamic>)['items'] as List<dynamic>;
     return data
         .map((e) => LeaveRequestModel.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -71,6 +77,7 @@ class LeaveRequestRepository {
     );
     final data = response.data as List<dynamic>;
     return data
+        .where((e) => e is Map && e['isAvailable'] == true)
         .map((e) => SubstituteTrainerModel.fromJson(e as Map<String, dynamic>))
         .toList();
   }

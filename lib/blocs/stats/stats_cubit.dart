@@ -1,3 +1,5 @@
+import '../../core/school_time.dart';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../models/stats_model.dart';
@@ -17,7 +19,7 @@ class StatsState {
   });
 
   factory StatsState.initial() {
-    final now = DateTime.now();
+    final now = SchoolTime.now();
     return StatsState(month: DateTime(now.year, now.month, 1));
   }
 
@@ -28,7 +30,7 @@ class StatsState {
       : schools.map((s) => s.sessionsCount).reduce((a, b) => a > b ? a : b);
 
   bool get isCurrentMonth {
-    final now = DateTime.now();
+    final now = SchoolTime.now();
     return month.year == now.year && month.month == now.month;
   }
 }
@@ -41,6 +43,7 @@ class StatsCubit extends Cubit<StatsState> {
   final String trainerId;
 
   final Map<String, List<SchoolSessionStat>> _cache = {};
+  final Map<String, DateTime> _cacheTimes = {};
   int _requestId = 0; // لتجاهل الردود القديمة إذا تنقل المستخدم بسرعة
 
   String _key(DateTime m) => '${m.year}-${m.month}';
@@ -62,10 +65,13 @@ class StatsCubit extends Cubit<StatsState> {
   }
 
   Future<void> _loadMonth(DateTime month) async {
+    if (isClosed) return;
     final id = ++_requestId;
     final cached = _cache[_key(month)];
 
-    if (cached != null) {
+    if (cached != null &&
+        DateTime.now().difference(_cacheTimes[_key(month)] ?? DateTime(2000)) <
+            const Duration(minutes: 1)) {
       emit(StatsState(month: month, schools: cached));
       return;
     }
@@ -77,11 +83,12 @@ class StatsCubit extends Cubit<StatsState> {
         trainerId: trainerId,
         month: month,
       );
-      if (id != _requestId) return;
+      if (isClosed || id != _requestId) return;
       _cache[_key(month)] = schools;
+      _cacheTimes[_key(month)] = DateTime.now();
       emit(StatsState(month: month, schools: schools));
     } catch (e) {
-      if (id != _requestId) return;
+      if (isClosed || id != _requestId) return;
       emit(StatsState(month: month, error: 'تعذّر تحميل الإحصائيات'));
     }
   }

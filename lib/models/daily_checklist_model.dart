@@ -1,19 +1,24 @@
-/// حالة الجلسة كما ترجع من الـ API (sessionStatus كرقم)
-/// 0 = مجدولة، 1 = جارية، 2 = منتهية — عدّلي القيم لو الباك اند مختلف
-enum DailySessionStatus { scheduled, active, done }
+enum DailySessionStatus {
+  scheduled,
+  completed,
+  cancelled,
+  pendingSubstitute,
+  substituted,
+  unknown,
+}
 
 extension DailySessionStatusX on DailySessionStatus {
-  static DailySessionStatus fromCode(int code) {
-    switch (code) {
-      case 1:
-        return DailySessionStatus.active;
-      case 2:
-        return DailySessionStatus.done;
-      case 0:
-      default:
-        return DailySessionStatus.scheduled;
-    }
-  }
+  static DailySessionStatus fromCode(int code) => code >= 0 && code <= 4
+      ? DailySessionStatus.values[code]
+      : DailySessionStatus.unknown;
+  String get label => [
+    'مجدولة',
+    'مكتملة',
+    'ملغاة',
+    'بانتظار بديل',
+    'مسندة لبديل',
+    'غير معروفة',
+  ][index];
 }
 
 /// عنصر واحد من daily-checklist - حصة يوم واحد مع كل تفاصيلها

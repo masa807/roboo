@@ -333,7 +333,7 @@ class _SessionLine extends StatelessWidget {
                   ),
                   SizedBox(height: context.h(2)),
                   Text(
-                    '${session.schoolName} · ${session.roomName}',
+                    '${session.schoolName} · ${session.roomName} · ${session.isReplaced ? 'تم استبدالك' : session.status.label}',
                     textAlign: TextAlign.right,
                     style: textTheme.bodySmall?.copyWith(
                       fontSize: context.sp(11),

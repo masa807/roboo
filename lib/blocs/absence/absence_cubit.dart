@@ -15,6 +15,54 @@ class AbsenceCubit extends Cubit<AbsenceState> {
 
   final LeaveRequestRepository _repository;
   final String trainerId;
+  int _page = 1;
+  int _generation = 0;
+  LeaveRequestStatus? _filter;
+  @override
+  void emit(AbsenceState state) {
+    if (!isClosed) super.emit(state);
+  }
+
+  Future<void> loadMore() async {
+    if (isClosed ||
+        state.status == AbsenceStatus.loading ||
+        !state.hasMore ||
+        state.loadingMore) {
+      return;
+    }
+    final generation = _generation;
+    emit(state.copyWith(loadingMore: true));
+    try {
+      final next = await _repository.getTrainerLeaveRequests(
+        trainerId: trainerId,
+        status: _filter,
+        page: _page + 1,
+      );
+      if (isClosed || generation != _generation) return;
+      _page++;
+      final ids = state.requests.map((r) => r.id).toSet();
+      emit(
+        state.copyWith(
+          requests: [
+            ...state.requests,
+            ...next.where((r) => !ids.contains(r.id)),
+          ],
+          hasMore: next.length == 20,
+          loadingMore: false,
+        ),
+      );
+    } catch (_) {
+      if (generation == _generation) {
+        emit(
+          state.copyWith(
+            loadingMore: false,
+            actionStatus: AbsenceActionStatus.failure,
+            actionError: 'تعذر تحميل المزيد، أعد المحاولة.',
+          ),
+        );
+      }
+    }
+  }
 
   /// دالة بتجيب حصص المدرب بتاريخ معين (نفس مصدر daily-checklist)
   final Future<List<DailyChecklistItem>> Function(DateTime date)?
@@ -51,16 +99,33 @@ class AbsenceCubit extends Cubit<AbsenceState> {
 
   /// يجيب طلبات الغياب تبع المدرب. [status] اختياري للفلترة.
   Future<void> loadRequests({LeaveRequestStatus? status}) async {
-    emit(state.copyWith(status: AbsenceStatus.loading));
+    if (isClosed) return;
+    final generation = ++_generation;
+    _page = 1;
+    _filter = status;
+    emit(state.copyWith(status: AbsenceStatus.loading, loadingMore: false));
     try {
       final requests = await _repository.getTrainerLeaveRequests(
         trainerId: trainerId,
         status: status,
       );
-      emit(state.copyWith(status: AbsenceStatus.loaded, requests: requests));
-    } on ApiException catch (e) {
+      if (generation != _generation || isClosed) return;
       emit(
-        state.copyWith(status: AbsenceStatus.error, errorMessage: e.message),
+        state.copyWith(
+          status: AbsenceStatus.loaded,
+          requests: requests,
+          hasMore: requests.length == 20,
+        ),
+      );
+    } catch (e) {
+      if (generation != _generation || isClosed) return;
+      emit(
+        state.copyWith(
+          status: AbsenceStatus.error,
+          errorMessage: e is ApiException
+              ? e.message
+              : 'تعذر قراءة الطلبات، أعد المحاولة.',
+        ),
       );
     }
   }
@@ -73,6 +138,9 @@ class AbsenceCubit extends Cubit<AbsenceState> {
     List<String> sessionTrainerIds = const [],
     String? proposedSubstituteTrainerId,
   }) async {
+    if (isClosed || state.actionStatus == AbsenceActionStatus.submitting) {
+      return false;
+    }
     emit(state.copyWith(actionStatus: AbsenceActionStatus.submitting));
     try {
       await _repository.createLeaveRequest(
@@ -104,6 +172,9 @@ class AbsenceCubit extends Cubit<AbsenceState> {
 
   /// إلغاء طلب غياب (من طرف المدرب صاحب الطلب)
   Future<bool> cancelRequest(String requestId) async {
+    if (isClosed || state.actionStatus == AbsenceActionStatus.submitting) {
+      return false;
+    }
     emit(state.copyWith(actionStatus: AbsenceActionStatus.submitting));
     try {
       await _repository.cancelLeaveRequest(requestId);

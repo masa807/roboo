@@ -59,7 +59,7 @@ class AuthUser {
     String? fullNameFallback,
   }) {
     final payload = JwtUtils.decodePayload(accessToken);
-    final rawRole = payload[_roleClaim];
+    final rawRole = payload[_roleClaim] ?? payload['role'];
     final roles = rawRole is List
         ? rawRole.map((e) => e.toString()).toList()
         : rawRole != null

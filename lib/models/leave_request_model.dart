@@ -1,4 +1,4 @@
-enum LeaveRequestStatus { pending, approved, rejected }
+enum LeaveRequestStatus { pending, approved, rejected, cancelled, unknown }
 
 extension LeaveRequestStatusX on LeaveRequestStatus {
   int get code => index; // 0, 1, 2 متل الـ API
@@ -10,8 +10,11 @@ extension LeaveRequestStatusX on LeaveRequestStatus {
       case 2:
         return LeaveRequestStatus.rejected;
       case 0:
-      default:
         return LeaveRequestStatus.pending;
+      case 3:
+        return LeaveRequestStatus.cancelled;
+      default:
+        return LeaveRequestStatus.unknown;
     }
   }
 
@@ -19,6 +22,10 @@ extension LeaveRequestStatusX on LeaveRequestStatus {
     switch (this) {
       case LeaveRequestStatus.pending:
         return 'قيد المراجعة';
+      case LeaveRequestStatus.cancelled:
+        return 'ملغى';
+      case LeaveRequestStatus.unknown:
+        return 'غير معروف';
       case LeaveRequestStatus.approved:
         return 'موافَق عليه';
       case LeaveRequestStatus.rejected:
@@ -27,13 +34,11 @@ extension LeaveRequestStatusX on LeaveRequestStatus {
   }
 }
 
-/// selectionMode متل ما راجعة بالـ Swagger — 0 = يوم كامل (targetDate)،
-/// 1 = حصص محددة (sessionTrainerIds). إذا الـ enum الحقيقي مختلف
-/// بس عدّل القيم هون، الباقي كله رح يمشي بدون تغيير.
+// Custom = 0, FullDay = 1 in the backend contract.
 enum LeaveSelectionMode { fullDay, specificSessions }
 
 extension LeaveSelectionModeX on LeaveSelectionMode {
-  int get code => index;
+  int get code => this == LeaveSelectionMode.fullDay ? 1 : 0;
 }
 
 class LeaveRequestModel {
@@ -62,9 +67,9 @@ class LeaveRequestModel {
   factory LeaveRequestModel.fromJson(Map<String, dynamic> json) {
     return LeaveRequestModel(
       id: json['id'] as String,
-      trainerId: json['trainerId'] as String,
+      trainerId: json['trainerId'] as String? ?? '',
       reason: json['reason'] as String? ?? '',
-      selectionMode: (json['selectionMode'] as int? ?? 0) == 1
+      selectionMode: (json['selectionMode'] as int? ?? 0) == 0
           ? LeaveSelectionMode.specificSessions
           : LeaveSelectionMode.fullDay,
       targetDate: json['targetDate'] != null
@@ -140,8 +145,10 @@ class SubstituteTrainerModel {
 
   factory SubstituteTrainerModel.fromJson(Map<String, dynamic> json) {
     return SubstituteTrainerModel(
-      id: json['id'] as String,
-      name: (json['name'] ?? json['fullName'] ?? '') as String,
+      id: (json['trainerId'] ?? json['id']) as String,
+      name:
+          (json['trainerName'] ?? json['name'] ?? json['fullName'] ?? '')
+              as String,
     );
   }
 }

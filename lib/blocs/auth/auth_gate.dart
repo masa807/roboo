@@ -16,16 +16,22 @@ class AuthGate extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return BlocBuilder<AuthBloc, AuthState>(
+    return BlocConsumer<AuthBloc, AuthState>(
+      listener: (context, state) {
+        if (state.status == AuthStatus.unauthenticated) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
+      },
       // authenticating و unauthenticated كلهم لوجين، فما منعيد بناء الشاشة
       // (عشان ما يضيع شي كاتبه المستخدم بالفورم)
-      buildWhen: (prev, curr) => _screenOf(prev) != _screenOf(curr),
+      buildWhen: (prev, curr) =>
+          _screenOf(prev) != _screenOf(curr) || prev.user?.id != curr.user?.id,
       builder: (context, state) {
         switch (_screenOf(state)) {
           case _Screen.splash:
             return const _SplashScreen();
           case _Screen.home:
-            return const MainShell();
+            return MainShell(key: ValueKey(state.user?.id));
           case _Screen.login:
             return const LoginScreen();
         }
@@ -41,7 +47,9 @@ _Screen _screenOf(AuthState state) {
     case AuthStatus.unknown:
       return _Screen.splash;
     case AuthStatus.authenticated:
-      return _Screen.home;
+      return state.user?.isTrainer == true && state.user!.trainerId.isNotEmpty
+          ? _Screen.home
+          : _Screen.login;
     case AuthStatus.authenticating:
     case AuthStatus.unauthenticated:
       return _Screen.login;

@@ -1,3 +1,4 @@
+import '../../core/school_time.dart';
 import '../../models/daily_checklist_model.dart';
 
 enum AttendanceStatus { initial, loading, loaded, error }
@@ -8,6 +9,7 @@ class AttendanceState {
   final AttendanceStatus status;
   final List<DailyChecklistItem> sessions;
   final String? errorMessage;
+  final String? syncMessage;
   final DateTime selectedDate;
 
   final CheckInStatus checkInStatus;
@@ -18,16 +20,18 @@ class AttendanceState {
     this.status = AttendanceStatus.initial,
     this.sessions = const [],
     this.errorMessage,
+    this.syncMessage,
     DateTime? selectedDate,
     this.checkInStatus = CheckInStatus.idle,
     this.checkInError,
     this.checkingInSessionId,
-  }) : selectedDate = selectedDate ?? DateTime.now();
+  }) : selectedDate = selectedDate ?? SchoolTime.now();
 
   AttendanceState copyWith({
     AttendanceStatus? status,
     List<DailyChecklistItem>? sessions,
     String? errorMessage,
+    String? syncMessage,
     DateTime? selectedDate,
     CheckInStatus? checkInStatus,
     String? checkInError,
@@ -37,6 +41,7 @@ class AttendanceState {
       status: status ?? this.status,
       sessions: sessions ?? this.sessions,
       errorMessage: errorMessage,
+      syncMessage: syncMessage,
       selectedDate: selectedDate ?? this.selectedDate,
       checkInStatus: checkInStatus ?? this.checkInStatus,
       checkInError: checkInError,
