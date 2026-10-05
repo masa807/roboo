@@ -37,7 +37,7 @@ Future<void> main() async {
   }
   const baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://10.0.2.2:5125',
+    defaultValue: 'http://191.218.163.66:8180/swagger',
   );
   final uri = Uri.tryParse(baseUrl);
   if (uri == null ||

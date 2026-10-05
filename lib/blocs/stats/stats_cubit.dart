@@ -1,7 +1,7 @@
-import '../../core/school_time.dart';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../core/school_time.dart';
 import '../../models/stats_model.dart';
 import '../../repositories/stats_repository.dart';
 
@@ -87,7 +87,10 @@ class StatsCubit extends Cubit<StatsState> {
       _cache[_key(month)] = schools;
       _cacheTimes[_key(month)] = DateTime.now();
       emit(StatsState(month: month, schools: schools));
-    } catch (e) {
+    } catch (e, st) {
+      // للتشخيص فقط، احذفه لاحقاً
+      debugPrint('STATS ERROR: $e');
+      debugPrint('$st');
       if (isClosed || id != _requestId) return;
       emit(StatsState(month: month, error: 'تعذّر تحميل الإحصائيات'));
     }

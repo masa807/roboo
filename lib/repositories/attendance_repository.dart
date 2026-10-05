@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 
 import '../core/network/api_client.dart';
 import '../models/daily_checklist_model.dart';
-import '../models/stats_model.dart';
 
 class AttendanceRepository {
   AttendanceRepository(this._api);
@@ -63,37 +62,29 @@ class AttendanceRepository {
     }
   }
 
-  Future<List<SchoolSessionStat>> getMonthlySchoolStats({
-    required String trainerId,
-    required DateTime month,
-  }) async {
-    final response = await _api.get(
-      '/api/trainers/$trainerId/attendance/monthly-school-stats',
-      queryParameters: {'year': month.year, 'month': month.month},
-    );
-    return (response.data as List)
-        .map(
-          (e) => SchoolSessionStat(
-            schoolId: e['schoolId'] as String,
-            schoolName: e['schoolName'] as String,
-            sessionsCount: (e['sessionsCount'] as num).toInt(),
-          ),
-        )
-        .toList();
-  }
-
+  /// رسالة المحاولات اللي بانتظار المزامنة فقط.
+  /// المحاولات المرفوضة نهائياً من السيرفر بتنحذف ولا بتنعرض.
   Future<String?> pendingMessage(String trainerId) async {
-    await _queue;
-    final items = await _pending(trainerId);
-    if (items.isEmpty) return null;
-    final rejected = items.values.where((v) => v['error'] != null).toList();
-    final waiting = items.length - rejected.length;
-    return [
-      if (waiting > 0)
-        '$waiting محاولة محفوظة بانتظار المزامنة؛ لم يُؤكَّد حضورها بعد.',
-      if (rejected.isNotEmpty)
-        'تعذرت مزامنة ${rejected.length} محاولة: ${rejected.first['error']}',
-    ].join(' ');
+    try {
+      return await _serial(() async {
+        final items = await _pending(trainerId);
+        if (items.isEmpty) return null;
+        final rejected = items.entries
+            .where((e) => e.value['error'] != null)
+            .map((e) => e.key)
+            .toList();
+        if (rejected.isNotEmpty) {
+          for (final key in rejected) {
+            items.remove(key);
+          }
+          await _save(trainerId, items);
+        }
+        if (items.isEmpty) return null;
+        return '${items.length} محاولة محفوظة بانتظار المزامنة؛ لم يُؤكَّد حضورها بعد.';
+      });
+    } on ApiException {
+      return null;
+    }
   }
 
   Future<void> syncPending(String trainerId) => _serial(() async {

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 
 class ApiException implements Exception {
   final String message;
@@ -130,6 +131,11 @@ class ApiClient {
     try {
       return await request();
     } on DioException catch (e) {
+      // للتشخيص فقط، احذفه لاحقاً
+      debugPrint('API ERROR type=${e.type}');
+      debugPrint('API ERROR uri=${e.requestOptions.uri}');
+      debugPrint('API ERROR status=${e.response?.statusCode}');
+      debugPrint('API ERROR body=${e.response?.data}');
       if (e.error is ApiException) throw e.error as ApiException;
       throw ApiException(_messageFrom(e), statusCode: e.response?.statusCode);
     }
